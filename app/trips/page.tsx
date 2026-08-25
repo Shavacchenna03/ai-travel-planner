@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/formatters";
 import { itinerarySchema, tripRequestSchema } from "@/lib/trip-schema";
 import { Button } from "@/components/ui/button";
+import { NavigationHeader } from "@/components/navigation-header";
 import { Calendar, Compass, MapPin, Tag, Users, ArrowRight } from "@/components/icons";
 
 export const metadata = {
@@ -65,25 +66,7 @@ export default async function SavedTripsPage() {
   return (
     <main className="min-h-screen bg-[#f7f5f1] pb-20 text-slate-800">
       {/* Top Header */}
-      <header className="sticky top-0 z-20 border-b border-[#e4dfd6] bg-[#f7f5f1]/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-10">
-          <Link href="/" className="flex items-center gap-2 text-xl font-bold text-[#16324f]">
-            <Compass className="size-6 text-[#187764]" />
-            <span>Roamly</span>
-          </Link>
-          <nav className="flex items-center gap-4 sm:gap-6 text-sm font-semibold text-slate-600">
-            <Link href="/" className="transition-colors hover:text-[#16324f]">
-              Home
-            </Link>
-            <Link href="/plan" className="transition-colors hover:text-[#16324f]">
-              Plan a trip
-            </Link>
-            <Link href="/trips" className="text-[#187764] font-bold">
-              Saved Trips
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <NavigationHeader />
 
       {/* Main Page Container */}
       <section className="mx-auto max-w-6xl px-6 pt-10 sm:px-10">

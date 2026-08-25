@@ -3,13 +3,16 @@ import Link from "next/link";
 import { ArrowRight, Compass, MapPin, Sparkles } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 
+import { auth } from "@/auth";
+
 const steps = [
   ["01", "Tell us where", "Share your destination, dates, budget, and travel pace."],
   ["02", "Shape the details", "Choose stays and food that feel like your kind of trip."],
   ["03", "Travel with a plan", "Get a balanced day-by-day itinerary built around you."],
 ];
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth();
   return (
     <main className="overflow-hidden">
       <section className="relative isolate min-h-[760px] overflow-hidden bg-[#102a43] text-white">
@@ -25,6 +28,17 @@ export default function Home() {
             <nav className="flex items-center gap-5 text-sm font-semibold text-white/80">
               <Link href="/plan" className="transition hover:text-white">Plan a trip</Link>
               <Link href="/trips" className="transition hover:text-white">Saved Trips</Link>
+              {session?.user ? (
+                <div className="flex items-center gap-3 pl-2 border-l border-white/20">
+                  <span className="text-xs text-white/90 font-medium">{session.user.name || session.user.email}</span>
+                  <Link href="/api/auth/signout" className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20">Sign Out</Link>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 pl-2 border-l border-white/20">
+                  <Link href="/auth/signin" className="transition hover:text-white">Sign In</Link>
+                  <Link href="/auth/signup" className="rounded-lg bg-[#f3b76f] px-3.5 py-1.5 text-xs font-bold text-[#102a43] hover:bg-[#f7c88d]">Sign Up</Link>
+                </div>
+              )}
             </nav>
           </header>
 

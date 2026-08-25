@@ -6,6 +6,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, Compass, Download, Loader, MapPin, Sparkles, Tag, Trash2, Users, Utensils } from "@/components/icons";
+import { NavigationHeader } from "@/components/navigation-header";
 import { formatCurrency } from "@/lib/formatters";
 import type { Itinerary, TripRequest } from "@/lib/trip-schema";
 
@@ -150,25 +151,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
       )}
 
       {/* Top Header */}
-      <header className="sticky top-0 z-20 border-b border-[#e4dfd6] bg-[#f7f5f1]/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-10">
-          <Link href="/" className="flex items-center gap-2 text-xl font-bold text-[#16324f]">
-            <Compass className="size-6 text-[#187764]" />
-            <span>Roamly</span>
-          </Link>
-          <nav className="flex items-center gap-4 sm:gap-6 text-sm font-semibold text-slate-600">
-            <Link href="/" className="transition-colors hover:text-[#16324f]">
-              Home
-            </Link>
-            <Link href="/plan" className="transition-colors hover:text-[#16324f]">
-              Plan a trip
-            </Link>
-            <Link href="/trips" className="transition-colors hover:text-[#16324f]">
-              Saved Trips
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <NavigationHeader />
 
       {/* Main Content Container */}
       <section className="mx-auto max-w-6xl px-6 pt-8 sm:px-10">
