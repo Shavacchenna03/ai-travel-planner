@@ -1,23 +1,37 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Compass, Download, Loader, MapPin, Sparkles, Tag, Users, Utensils } from "@/components/icons";
+import { Calendar, Clock, Compass, Download, Loader, MapPin, Sparkles, Tag, Trash2, Users, Utensils } from "@/components/icons";
 import { formatCurrency } from "@/lib/formatters";
 import type { Itinerary, TripRequest } from "@/lib/trip-schema";
 
-type StoredTrip = { tripId?: string; itinerary: Itinerary; request: TripRequest };
+type StoredTrip = { tripId?: string; itinerary: Itinerary; request: TripRequest; createdAt?: string | Date };
 
-export function ItineraryResults() {
-  const trip = useSyncExternalStore(subscribe, readStoredTrip, getServerSnapshot);
+type ItineraryResultsProps = {
+  initialTrip?: StoredTrip;
+  showDelete?: boolean;
+};
+
+export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsProps) {
+  const router = useRouter();
+  const clientStoredTrip = useSyncExternalStore(subscribe, readStoredTrip, getServerSnapshot);
+  const trip = initialTrip ?? clientStoredTrip;
+
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState("");
 
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
   if (!trip) return <EmptyResults />;
-  const { itinerary, request } = trip;
+  const { itinerary, request, tripId } = trip;
   const currency = itinerary.currency || request.currency || "INR";
+  const canDelete = showDelete || Boolean(tripId);
 
   async function handleDownloadPdf() {
     if (!trip) return;
@@ -52,8 +66,89 @@ export function ItineraryResults() {
     }
   }
 
+  async function handleDeleteTrip() {
+    if (!tripId) return;
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      const res = await fetch(`/api/trips/${tripId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const payload = await res.json();
+        throw new Error(payload.error || "Failed to delete trip");
+      }
+      if (typeof window !== "undefined") {
+        const raw = sessionStorage.getItem("roamly-current-itinerary");
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed.tripId === tripId) {
+              sessionStorage.removeItem("roamly-current-itinerary");
+              window.dispatchEvent(new Event("roamly-storage-update"));
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+      router.push("/trips");
+      router.refresh();
+    } catch (err) {
+      console.error("Delete failed:", err);
+      setDeleteError(err instanceof Error ? err.message : "Could not delete trip.");
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f5f1] pb-20 text-slate-800">
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+              <Trash2 className="size-6" />
+            </div>
+            <h2 className="mt-4 text-xl font-bold text-[#16324f]">Delete trip itinerary?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Are you sure you want to delete this trip to <strong className="font-semibold text-slate-900">{itinerary.destination}</strong>? This action will remove the record from your database permanently.
+            </p>
+
+            {deleteError && (
+              <div role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <Button
+                disabled={isDeleting}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteError("");
+                }}
+                className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={isDeleting}
+                onClick={handleDeleteTrip}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader className="size-4 animate-spin" />
+                    <span>Deleting…</span>
+                  </>
+                ) : (
+                  "Delete Trip"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <header className="sticky top-0 z-20 border-b border-[#e4dfd6] bg-[#f7f5f1]/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-10">
@@ -61,17 +156,51 @@ export function ItineraryResults() {
             <Compass className="size-6 text-[#187764]" />
             <span>Roamly</span>
           </Link>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/plan"
-              className="text-sm font-semibold text-slate-600 transition-colors hover:text-[#16324f]"
-            >
-              Plan another trip
+          <nav className="flex items-center gap-4 sm:gap-6 text-sm font-semibold text-slate-600">
+            <Link href="/" className="transition-colors hover:text-[#16324f]">
+              Home
             </Link>
+            <Link href="/plan" className="transition-colors hover:text-[#16324f]">
+              Plan a trip
+            </Link>
+            <Link href="/trips" className="transition-colors hover:text-[#16324f]">
+              Saved Trips
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      {/* Main Content Container */}
+      <section className="mx-auto max-w-6xl px-6 pt-8 sm:px-10">
+        {downloadError && (
+          <div role="alert" className="mb-6 rounded-2xl bg-red-50 p-4 text-sm text-red-700 border border-red-200 flex items-center justify-between">
+            <span>{downloadError}</span>
+            <button onClick={() => setDownloadError("")} className="font-bold underline text-xs">Dismiss</button>
+          </div>
+        )}
+
+        {/* Action Toolbar */}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <Link
+            href="/trips"
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors hover:text-[#16324f]"
+          >
+            ← Back to Saved Trips
+          </Link>
+          <div className="flex items-center gap-3">
+            {canDelete && (
+              <Button
+                onClick={() => setShowDeleteModal(true)}
+                className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 shadow-2xs text-xs font-bold"
+              >
+                <Trash2 className="size-4" />
+                <span>Delete Trip</span>
+              </Button>
+            )}
             <Button
               onClick={handleDownloadPdf}
               disabled={isDownloading}
-              className="bg-[#187764] hover:bg-[#126653] text-white shadow-sm"
+              className="bg-[#187764] hover:bg-[#126653] text-white shadow-xs text-xs font-bold"
             >
               {isDownloading ? (
                 <>
@@ -87,23 +216,15 @@ export function ItineraryResults() {
             </Button>
           </div>
         </div>
-      </header>
-
-      {/* Main Content Container */}
-      <section className="mx-auto max-w-6xl px-6 pt-8 sm:px-10">
-        {downloadError && (
-          <div role="alert" className="mb-6 rounded-2xl bg-red-50 p-4 text-sm text-red-700 border border-red-200 flex items-center justify-between">
-            <span>{downloadError}</span>
-            <button onClick={() => setDownloadError("")} className="font-bold underline text-xs">Dismiss</button>
-          </div>
-        )}
 
         {/* Hero Banner / Trip Info */}
         <div className="rounded-3xl border border-[#e8e3db] bg-white p-6 sm:p-10 shadow-[0_18px_55px_-35px_rgba(22,50,79,0.25)]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e7f2ef] px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-[#187764]">
               <Sparkles className="size-3.5" />
-              Your Custom Itinerary
+              {trip.createdAt
+                ? `Saved Trip · ${new Date(trip.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                : "Your Custom Itinerary"}
             </span>
           </div>
 
@@ -278,11 +399,11 @@ export function ItineraryResults() {
                 ))}
               </ul>
 
-              <div className="mt-6 border-t border-[#b6dfd5] pt-5">
+              <div className="mt-6 space-y-3 border-t border-[#b6dfd5] pt-5">
                 <Button
                   onClick={handleDownloadPdf}
                   disabled={isDownloading}
-                  className="w-full bg-[#16324f] hover:bg-[#234a70] text-white py-3 shadow-sm"
+                  className="w-full bg-[#16324f] hover:bg-[#234a70] text-white py-3 shadow-sm text-xs font-bold"
                 >
                   {isDownloading ? (
                     <>
@@ -296,6 +417,16 @@ export function ItineraryResults() {
                     </>
                   )}
                 </Button>
+
+                {canDelete && (
+                  <Button
+                    onClick={() => setShowDeleteModal(true)}
+                    className="w-full bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 py-3 text-xs font-bold"
+                  >
+                    <Trash2 className="size-4" />
+                    <span>Delete Trip</span>
+                  </Button>
+                )}
               </div>
 
               <p className="mt-4 text-xs leading-normal text-slate-500">
@@ -311,24 +442,36 @@ export function ItineraryResults() {
             <Link href="/plan">Plan another trip</Link>
           </Button>
 
-          <Button
-            onClick={handleDownloadPdf}
-            disabled={isDownloading}
-            size="lg"
-            className="bg-[#16324f] hover:bg-[#234a70]"
-          >
-            {isDownloading ? (
-              <>
-                <Loader className="size-4 animate-spin" />
-                <span>Generating PDF…</span>
-              </>
-            ) : (
-              <>
-                <Download className="size-4" />
-                <span>Download PDF</span>
-              </>
+          <div className="flex items-center gap-3">
+            {canDelete && (
+              <Button
+                onClick={() => setShowDeleteModal(true)}
+                size="lg"
+                className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
+              >
+                <Trash2 className="size-4" />
+                <span>Delete Trip</span>
+              </Button>
             )}
-          </Button>
+            <Button
+              onClick={handleDownloadPdf}
+              disabled={isDownloading}
+              size="lg"
+              className="bg-[#16324f] hover:bg-[#234a70]"
+            >
+              {isDownloading ? (
+                <>
+                  <Loader className="size-4 animate-spin" />
+                  <span>Generating PDF…</span>
+                </>
+              ) : (
+                <>
+                  <Download className="size-4" />
+                  <span>Download PDF</span>
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </section>
     </main>

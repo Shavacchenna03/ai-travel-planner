@@ -22,7 +22,10 @@ export default function Home() {
               <span className="grid size-9 place-items-center rounded-xl bg-[#f3b76f] text-[#102a43]"><Compass className="size-5" /></span>
               Roamly
             </Link>
-            <Link href="/plan" className="text-sm font-medium text-white/80 transition hover:text-white">Plan a trip</Link>
+            <nav className="flex items-center gap-5 text-sm font-semibold text-white/80">
+              <Link href="/plan" className="transition hover:text-white">Plan a trip</Link>
+              <Link href="/trips" className="transition hover:text-white">Saved Trips</Link>
+            </nav>
           </header>
 
           <div className="grid flex-1 items-center gap-14 py-16 lg:grid-cols-[1.08fr_0.92fr] lg:py-20">
