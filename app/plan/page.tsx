@@ -1,9 +1,17 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { NavigationHeader } from "@/components/navigation-header";
 import { TripPlanningForm } from "@/components/plan/trip-planning-form";
 
 export const metadata = { title: "Plan a trip — Roamly" };
 
-export default function PlanPage() {
+export default async function PlanPage() {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect("/auth/signin?callbackUrl=/plan");
+  }
+
   return (
     <main className="min-h-screen bg-[#f7f5f1]">
       <NavigationHeader />

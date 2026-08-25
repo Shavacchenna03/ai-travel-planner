@@ -14,6 +14,10 @@ export async function POST(request: Request) {
 
   try {
     const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Authentication required to download PDFs." }, { status: 401 });
+    }
+
     const body = await request.json();
     const { itinerary, request: tripRequest, tripId } = body ?? {};
 

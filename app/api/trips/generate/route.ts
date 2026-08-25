@@ -10,6 +10,9 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Authentication required to generate itineraries. Please sign in." }, { status: 401 });
+  }
 
   let body: unknown;
   try {

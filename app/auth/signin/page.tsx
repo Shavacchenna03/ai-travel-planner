@@ -8,6 +8,7 @@ import { signIn } from "next-auth/react";
 import { Compass, Loader } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { FieldError, FieldLabel, Input } from "@/components/ui/field";
+import { sanitizeCallbackUrl } from "@/lib/security";
 
 export default function SignInPage() {
   return (
@@ -20,7 +21,7 @@ export default function SignInPage() {
 function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/trips";
+  const callbackUrl = sanitizeCallbackUrl(searchParams.get("callbackUrl"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

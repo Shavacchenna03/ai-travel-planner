@@ -1,5 +1,15 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { ItineraryResults } from "@/components/plan/itinerary-results";
 
 export const metadata = { title: "Your itinerary — Roamly" };
 
-export default function ResultsPage() { return <ItineraryResults />; }
+export default async function ResultsPage() {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect("/auth/signin?callbackUrl=/plan/results");
+  }
+
+  return <ItineraryResults />;
+}
