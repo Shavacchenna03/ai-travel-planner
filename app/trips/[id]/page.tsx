@@ -1,16 +1,20 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { itinerarySchema, tripRequestSchema, type Itinerary, type TripRequest } from "@/lib/trip-schema";
 import { ItineraryResults } from "@/components/plan/itinerary-results";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.id) return { title: "Trip Itinerary — Roamly" };
+
   try {
     const record = await prisma.trip.findUnique({
       where: { id },
-      select: { destination: true },
+      select: { destination: true, userId: true },
     });
-    if (record) {
+    if (record && (!record.userId || record.userId === session.user.id)) {
       return { title: `${record.destination} Trip Itinerary — Roamly` };
     }
   } catch {
@@ -21,6 +25,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function TripDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect(`/auth/signin?callbackUrl=/trips/${id}`);
+  }
 
   let record;
   try {
@@ -32,6 +41,11 @@ export default async function TripDetailsPage({ params }: { params: Promise<{ id
   }
 
   if (!record) {
+    notFound();
+  }
+
+  // Ownership Authorization Check: User can only access if record belongs to current user
+  if (record.userId && record.userId !== session.user.id) {
     notFound();
   }
 

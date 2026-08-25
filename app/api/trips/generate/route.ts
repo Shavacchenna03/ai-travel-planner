@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 
+import { auth } from "@/auth";
 import { generateItinerary, TravelPlannerError } from "@/lib/ai/travel-planner";
 import { prisma } from "@/lib/prisma";
 import { tripRequestSchema } from "@/lib/trip-schema";
@@ -8,6 +9,8 @@ import { tripRequestSchema } from "@/lib/trip-schema";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const session = await auth();
+
   let body: unknown;
   try {
     body = await request.json();
@@ -34,6 +37,7 @@ export async function POST(request: Request) {
   try {
     const savedTrip = await prisma.trip.create({
       data: {
+        userId: session?.user?.id ?? null,
         destination: parsedInput.data.destination,
         budget: parsedInput.data.budget,
         currency: parsedInput.data.currency,

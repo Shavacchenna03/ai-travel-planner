@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/formatters";
 import { itinerarySchema, tripRequestSchema } from "@/lib/trip-schema";
 import { Button } from "@/components/ui/button";
 import { NavigationHeader } from "@/components/navigation-header";
-import { Calendar, Compass, MapPin, Tag, Users, ArrowRight } from "@/components/icons";
+import { Calendar, MapPin, Tag, Users, ArrowRight, Compass } from "@/components/icons";
 
 export const metadata = {
   title: "Saved Trips — Roamly",
@@ -14,6 +16,12 @@ export const metadata = {
 export const revalidate = 0; // Dynamic server rendering for fresh DB data
 
 export default async function SavedTripsPage() {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect("/auth/signin?callbackUrl=/trips");
+  }
+
   let dbTrips: Array<{
     id: string;
     destination: string;
@@ -33,10 +41,11 @@ export default async function SavedTripsPage() {
 
   try {
     dbTrips = await prisma.trip.findMany({
+      where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
     });
   } catch (err) {
-    console.error("[Roamly DB Error] Failed to fetch saved trips:", err);
+    console.error("[Roamly DB Error] Failed to fetch saved trips for user:", err);
     queryError = true;
   }
 
@@ -80,7 +89,7 @@ export default async function SavedTripsPage() {
               Saved Trips
             </h1>
             <p className="mt-2 text-base text-slate-600">
-              Browse and manage your custom travel itineraries.
+              Browse and manage your personal travel itineraries.
             </p>
           </div>
 
@@ -109,7 +118,7 @@ export default async function SavedTripsPage() {
               No saved trips yet
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              When you generate a trip itinerary, it will automatically be saved here for easy access and PDF export.
+              When you generate a trip itinerary while signed in, it will automatically be saved here for easy access and PDF export.
             </p>
             <Button asChild size="lg" className="mt-6 bg-[#187764] hover:bg-[#126653]">
               <Link href="/plan">Plan your first trip</Link>

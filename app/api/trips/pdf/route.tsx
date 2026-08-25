@@ -1,6 +1,8 @@
 import React from "react";
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { ItineraryPdfDocument } from "@/lib/pdf/itinerary-pdf-document";
 import { itinerarySchema, tripRequestSchema } from "@/lib/trip-schema";
 
@@ -11,8 +13,20 @@ export async function POST(request: Request) {
   let requestData;
 
   try {
+    const session = await auth();
     const body = await request.json();
-    const { itinerary, request: tripRequest } = body ?? {};
+    const { itinerary, request: tripRequest, tripId } = body ?? {};
+
+    if (tripId) {
+      const existingTrip = await prisma.trip.findUnique({
+        where: { id: tripId },
+        select: { userId: true },
+      });
+
+      if (existingTrip && existingTrip.userId && existingTrip.userId !== session?.user?.id) {
+        return NextResponse.json({ error: "You do not have permission to download this PDF." }, { status: 403 });
+      }
+    }
 
     if (!itinerary || !tripRequest) {
       return NextResponse.json({ error: "Missing itinerary or trip request data." }, { status: 400 });
