@@ -8,7 +8,7 @@ import { Calendar, Clock, Compass, Download, Loader, MapPin, Sparkles, Tag, User
 import { formatCurrency } from "@/lib/formatters";
 import type { Itinerary, TripRequest } from "@/lib/trip-schema";
 
-type StoredTrip = { itinerary: Itinerary; request: TripRequest };
+type StoredTrip = { tripId?: string; itinerary: Itinerary; request: TripRequest };
 
 export function ItineraryResults() {
   const trip = useSyncExternalStore(subscribe, readStoredTrip, getServerSnapshot);

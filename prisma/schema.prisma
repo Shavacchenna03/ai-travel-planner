@@ -9,3 +9,19 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model Trip {
+  id             String   @id @default(cuid())
+  destination    String
+  budget         Float
+  currency       String
+  duration       Int
+  travelers      Int
+  style          String
+  accommodation  String
+  food           String
+  requestPayload Json
+  itinerary      Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
