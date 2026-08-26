@@ -1,4 +1,5 @@
-import { activitySchema, dailyItinerarySchema, itinerarySchema, type Activity, type DailyItinerary, type Itinerary, type TripRequest } from "@/lib/trip-schema";
+import { activitySchema, dailyItinerarySchema, itinerarySchema, type Activity, type DailyItinerary, type Itinerary, type TripRequest, type WeatherData } from "@/lib/trip-schema";
+import type { NormalizedWeatherData } from "@/lib/weather";
 import { MockProvider } from "../mock-provider";
 import {
   buildRegenerateActivityUserPrompt,
@@ -134,16 +135,18 @@ export class GroqProvider implements AIProvider {
     return validation.data;
   }
 
-  async generateItinerary(input: TripRequest): Promise<Itinerary> {
+  async generateItinerary(input: TripRequest, weatherData?: NormalizedWeatherData | null): Promise<Itinerary> {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey && (process.env.ALLOW_MOCK_FALLBACK === "true" || process.env.USE_MOCK_ITINERARY === "true")) {
-      return new MockProvider().generateItinerary(input);
+      return new MockProvider().generateItinerary(input, weatherData);
     }
 
+    const hasWeather = weatherData && weatherData.mode !== "unavailable";
     console.log(`[Roamly Groq Debug] Requested duration: ${input.duration} days | Destination: ${input.destination}`);
+    console.log(`[Roamly AI] Weather context supplied to Groq: ${hasWeather ? `YES (${weatherData.mode})` : "NO"}`);
 
-    const systemPrompt = buildTravelPlannerSystemPrompt(input.duration);
-    const userPrompt = buildUserPrompt(input);
+    const systemPrompt = buildTravelPlannerSystemPrompt(input.duration, weatherData);
+    const userPrompt = buildUserPrompt(input, weatherData);
 
     try {
       const initialCall = await this.callGroqAPI([
@@ -153,7 +156,6 @@ export class GroqProvider implements AIProvider {
 
       const validated = this.parseAndValidateItinerary(initialCall.content, input, initialCall.modelUsed);
 
-      // Check duration & currency match
       if (validated.currency === input.currency && validated.dailyItinerary.length === input.duration) {
         console.log(
           `[Roamly Groq Debug] Model: ${initialCall.modelUsed} | Duration & Currency Match: SUCCESS (${validated.dailyItinerary.length}/${input.duration} days)`
@@ -165,12 +167,10 @@ export class GroqProvider implements AIProvider {
         `[Roamly Groq Debug] Duration/Currency mismatch - Currency (expected: ${input.currency}, got: ${validated.currency}), Duration (expected: ${input.duration}, got: ${validated.dailyItinerary.length}). Pausing 1.5s then triggering 1 retry...`
       );
 
-      // Short pause before retry to ensure TPM rate limits reset
       await new Promise((res) => setTimeout(res, 1500));
 
       const dayListStr = Array.from({ length: input.duration }, (_, i) => `Day ${i + 1}`).join(", ");
 
-      // Controlled 1-time retry for duration/currency mismatch
       const retryCall = await this.callGroqAPI([
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -197,7 +197,7 @@ export class GroqProvider implements AIProvider {
     } catch (err) {
       if (process.env.ALLOW_MOCK_FALLBACK === "true" || process.env.USE_MOCK_ITINERARY === "true") {
         console.warn("[Roamly AI Warning] Falling back to MockProvider for generateItinerary:", err);
-        return new MockProvider().generateItinerary(input);
+        return new MockProvider().generateItinerary(input, weatherData);
       }
       throw err;
     }
@@ -207,6 +207,7 @@ export class GroqProvider implements AIProvider {
     request: TripRequest;
     dayNumber: number;
     currentActivity: Activity;
+    dayWeather?: WeatherData | null;
     instruction?: string;
   }): Promise<Activity> {
     const apiKey = process.env.GROQ_API_KEY;
@@ -256,6 +257,7 @@ export class GroqProvider implements AIProvider {
     request: TripRequest;
     dayNumber: number;
     currentDay: DailyItinerary;
+    dayWeather?: WeatherData | null;
     instruction?: string;
   }): Promise<DailyItinerary> {
     const apiKey = process.env.GROQ_API_KEY;
@@ -302,74 +304,82 @@ export class GroqProvider implements AIProvider {
   }
 }
 
-/* Helper normalization functions for robust parsing */
+/* Helper normalization functions for robust parsing without `any` */
 
-function normalizeItineraryJSON(raw: any, input: TripRequest): any {
-  let obj = raw;
+function normalizeItineraryJSON(raw: unknown, input: TripRequest): Record<string, unknown> {
+  let obj = raw as Record<string, unknown> | null;
   if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-    if (obj.itinerary && typeof obj.itinerary === "object") obj = obj.itinerary;
-    else if (obj.trip && typeof obj.trip === "object") obj = obj.trip;
-    else if (obj.data && typeof obj.data === "object") obj = obj.data;
+    if (obj.itinerary && typeof obj.itinerary === "object") obj = obj.itinerary as Record<string, unknown>;
+    else if (obj.trip && typeof obj.trip === "object") obj = obj.trip as Record<string, unknown>;
+    else if (obj.data && typeof obj.data === "object") obj = obj.data as Record<string, unknown>;
   }
 
-  if (!obj || typeof obj !== "object") return obj;
+  if (!obj || typeof obj !== "object") return {};
 
-  if (!obj.destination || typeof obj.destination !== "string") obj.destination = input.destination;
-  if (!obj.currency || typeof obj.currency !== "string") obj.currency = input.currency;
-  if (!obj.country || typeof obj.country !== "string") obj.country = "Destination Country";
-  if (!obj.summary || typeof obj.summary !== "string") obj.summary = `A customized ${input.duration}-day trip to ${input.destination}.`;
+  const normalized: Record<string, unknown> = { ...obj };
 
-  if (typeof obj.travelTips === "string") {
-    obj.travelTips = obj.travelTips
+  if (!normalized.destination || typeof normalized.destination !== "string") normalized.destination = input.destination;
+  if (!normalized.currency || typeof normalized.currency !== "string") normalized.currency = input.currency;
+  if (!normalized.country || typeof normalized.country !== "string") normalized.country = "Destination Country";
+  if (!normalized.summary || typeof normalized.summary !== "string") normalized.summary = `A customized ${input.duration}-day trip to ${input.destination}.`;
+
+  if (typeof normalized.travelTips === "string") {
+    normalized.travelTips = normalized.travelTips
       .split("\n")
       .map((s: string) => s.replace(/^[-*\d.\s]+/, "").trim())
       .filter((s: string) => s.length > 0);
-  } else if (!Array.isArray(obj.travelTips)) {
-    obj.travelTips = ["Check local transport and opening hours prior to visiting."];
+  } else if (!Array.isArray(normalized.travelTips)) {
+    normalized.travelTips = ["Check local transport and opening hours prior to visiting."];
   } else {
-    obj.travelTips = obj.travelTips.map((tip: any) => String(tip).trim()).filter((tip: string) => tip.length > 0);
+    normalized.travelTips = (normalized.travelTips as unknown[]).map((tip) => String(tip).trim()).filter((tip: string) => tip.length > 0);
   }
 
-  if (Array.isArray(obj.dailyItinerary)) {
-    obj.dailyItinerary = obj.dailyItinerary.map((dayObj: any, dayIdx: number) => {
+  if (Array.isArray(normalized.dailyItinerary)) {
+    normalized.dailyItinerary = (normalized.dailyItinerary as unknown[]).map((dayRaw, dayIdx: number) => {
+      let dayObj = dayRaw as Record<string, unknown> | string;
       if (typeof dayObj === "string") {
-        try { dayObj = JSON.parse(dayObj); } catch { dayObj = {}; }
+        try { dayObj = JSON.parse(dayObj) as Record<string, unknown>; } catch { dayObj = {}; }
       }
-      const dayNum = Number(dayObj?.day) || (dayIdx + 1);
-      const title = String(dayObj?.title || `Day ${dayNum}: Exploring ${input.destination}`);
+      const dayRec = (dayObj && typeof dayObj === "object" ? dayObj : {}) as Record<string, unknown>;
+      const dayNum = Number(dayRec.day) || (dayIdx + 1);
+      const title = String(dayRec.title || `Day ${dayNum}: Exploring ${input.destination}`);
 
-      let activities = Array.isArray(dayObj?.activities) ? dayObj.activities : [];
-      activities = activities.map((act: any) => {
+      let activities = Array.isArray(dayRec.activities) ? dayRec.activities : [];
+      activities = (activities as unknown[]).map((actRaw) => {
+        let act = actRaw as Record<string, unknown> | string;
         if (typeof act === "string") {
-          try { act = JSON.parse(act); } catch { act = { name: act }; }
+          try { act = JSON.parse(act) as Record<string, unknown>; } catch { act = { name: act }; }
         }
+        const actRec = (act && typeof act === "object" ? act : {}) as Record<string, unknown>;
         return {
-          name: String(act?.name || "Sightseeing"),
-          description: String(act?.description || "Explore local attractions and scenic spots."),
-          location: String(act?.location || input.destination),
-          startTime: String(act?.startTime || "10:00 AM"),
-          duration: String(act?.duration || "2 hours"),
-          estimatedCost: Number(act?.estimatedCost) >= 0 ? Number(act.estimatedCost) : 0,
+          name: String(actRec.name || "Sightseeing"),
+          description: String(actRec.description || "Explore local attractions and scenic spots."),
+          location: String(actRec.location || input.destination),
+          startTime: String(actRec.startTime || "10:00 AM"),
+          duration: String(actRec.duration || "2 hours"),
+          estimatedCost: Number(actRec.estimatedCost) >= 0 ? Number(actRec.estimatedCost) : 0,
         };
       });
 
-      let restaurants = Array.isArray(dayObj?.restaurants) ? dayObj.restaurants : [];
-      restaurants = restaurants.map((rest: any) => {
+      let restaurants = Array.isArray(dayRec.restaurants) ? dayRec.restaurants : [];
+      restaurants = (restaurants as unknown[]).map((restRaw) => {
+        let rest = restRaw as Record<string, unknown> | string;
         if (typeof rest === "string") {
-          try { rest = JSON.parse(rest); } catch { rest = { name: rest }; }
+          try { rest = JSON.parse(rest) as Record<string, unknown>; } catch { rest = { name: rest }; }
         }
+        const restRec = (rest && typeof rest === "object" ? rest : {}) as Record<string, unknown>;
         return {
-          name: String(rest?.name || "Local Restaurant"),
-          cuisine: String(rest?.cuisine || "Regional Cuisine"),
-          meal: String(rest?.meal || "Lunch / Dinner"),
-          location: String(rest?.location || input.destination),
-          estimatedCost: Number(rest?.estimatedCost) >= 0 ? Number(rest.estimatedCost) : 0,
+          name: String(restRec.name || "Local Restaurant"),
+          cuisine: String(restRec.cuisine || "Regional Cuisine"),
+          meal: String(restRec.meal || "Lunch / Dinner"),
+          location: String(restRec.location || input.destination),
+          estimatedCost: Number(restRec.estimatedCost) >= 0 ? Number(restRec.estimatedCost) : 0,
         };
       });
 
-      const actsCost = activities.reduce((sum: number, a: any) => sum + a.estimatedCost, 0);
-      const restsCost = restaurants.reduce((sum: number, r: any) => sum + r.estimatedCost, 0);
-      const dailyEstimatedCost = Number(dayObj?.dailyEstimatedCost) >= 0 ? Number(dayObj.dailyEstimatedCost) : (actsCost + restsCost);
+      const actsCost = (activities as Array<{ estimatedCost: number }>).reduce((sum, a) => sum + a.estimatedCost, 0);
+      const restsCost = (restaurants as Array<{ estimatedCost: number }>).reduce((sum, r) => sum + r.estimatedCost, 0);
+      const dailyEstimatedCost = Number(dayRec.dailyEstimatedCost) >= 0 ? Number(dayRec.dailyEstimatedCost) : (actsCost + restsCost);
 
       return {
         day: dayNum,
@@ -381,22 +391,22 @@ function normalizeItineraryJSON(raw: any, input: TripRequest): any {
     });
   }
 
-  if (Array.isArray(obj.dailyItinerary)) {
-    const totalFromDays = obj.dailyItinerary.reduce((sum: number, d: any) => sum + (d.dailyEstimatedCost || 0), 0);
-    obj.estimatedTotalCost = Number(obj.estimatedTotalCost) >= 0 ? Number(obj.estimatedTotalCost) : totalFromDays;
+  if (Array.isArray(normalized.dailyItinerary)) {
+    const totalFromDays = (normalized.dailyItinerary as Array<{ dailyEstimatedCost: number }>).reduce((sum, d) => sum + (d.dailyEstimatedCost || 0), 0);
+    normalized.estimatedTotalCost = Number(normalized.estimatedTotalCost) >= 0 ? Number(normalized.estimatedTotalCost) : totalFromDays;
   } else {
-    obj.estimatedTotalCost = Number(obj.estimatedTotalCost) || 0;
+    normalized.estimatedTotalCost = Number(normalized.estimatedTotalCost) || 0;
   }
 
-  return obj;
+  return normalized;
 }
 
-function normalizeActivityJSON(raw: any, fallbackActivity: Activity): any {
-  let obj = raw;
+function normalizeActivityJSON(raw: unknown, fallbackActivity: Activity): Record<string, unknown> {
+  let obj = raw as Record<string, unknown> | null;
   if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-    if (obj.activity && typeof obj.activity === "object") obj = obj.activity;
+    if (obj.activity && typeof obj.activity === "object") obj = obj.activity as Record<string, unknown>;
   }
-  if (!obj || typeof obj !== "object") return fallbackActivity;
+  if (!obj || typeof obj !== "object") return fallbackActivity as unknown as Record<string, unknown>;
 
   return {
     name: String(obj.name || fallbackActivity.name),
@@ -408,47 +418,51 @@ function normalizeActivityJSON(raw: any, fallbackActivity: Activity): any {
   };
 }
 
-function normalizeDayJSON(raw: any, dayNumber: number, input: TripRequest): any {
-  let obj = raw;
+function normalizeDayJSON(raw: unknown, dayNumber: number, input: TripRequest): Record<string, unknown> {
+  let obj = raw as Record<string, unknown> | null;
   if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-    if (obj.dayItinerary && typeof obj.dayItinerary === "object") obj = obj.dayItinerary;
-    else if (obj.day && typeof obj.day === "object") obj = obj.day;
+    if (obj.dayItinerary && typeof obj.dayItinerary === "object") obj = obj.dayItinerary as Record<string, unknown>;
+    else if (obj.day && typeof obj.day === "object") obj = obj.day as Record<string, unknown>;
   }
   if (!obj || typeof obj !== "object") obj = {};
 
   const title = String(obj.title || `Day ${dayNumber}: Highlights in ${input.destination}`);
 
   let activities = Array.isArray(obj.activities) ? obj.activities : [];
-  activities = activities.map((act: any) => {
+  activities = (activities as unknown[]).map((actRaw) => {
+    let act = actRaw as Record<string, unknown> | string;
     if (typeof act === "string") {
-      try { act = JSON.parse(act); } catch { act = { name: act }; }
+      try { act = JSON.parse(act) as Record<string, unknown>; } catch { act = { name: act }; }
     }
+    const actRec = (act && typeof act === "object" ? act : {}) as Record<string, unknown>;
     return {
-      name: String(act?.name || "Sightseeing Spot"),
-      description: String(act?.description || "Enjoy local culture and scenery."),
-      location: String(act?.location || input.destination),
-      startTime: String(act?.startTime || "09:30 AM"),
-      duration: String(act?.duration || "2 hours"),
-      estimatedCost: Number(act?.estimatedCost) >= 0 ? Number(act.estimatedCost) : 0,
+      name: String(actRec.name || "Sightseeing Spot"),
+      description: String(actRec.description || "Enjoy local culture and scenery."),
+      location: String(actRec.location || input.destination),
+      startTime: String(actRec.startTime || "09:30 AM"),
+      duration: String(actRec.duration || "2 hours"),
+      estimatedCost: Number(actRec.estimatedCost) >= 0 ? Number(actRec.estimatedCost) : 0,
     };
   });
 
   let restaurants = Array.isArray(obj.restaurants) ? obj.restaurants : [];
-  restaurants = restaurants.map((rest: any) => {
+  restaurants = (restaurants as unknown[]).map((restRaw) => {
+    let rest = restRaw as Record<string, unknown> | string;
     if (typeof rest === "string") {
-      try { rest = JSON.parse(rest); } catch { rest = { name: rest }; }
+      try { rest = JSON.parse(rest) as Record<string, unknown>; } catch { rest = { name: rest }; }
     }
+    const restRec = (rest && typeof rest === "object" ? rest : {}) as Record<string, unknown>;
     return {
-      name: String(rest?.name || "Local Bistro"),
-      cuisine: String(rest?.cuisine || "Regional Cuisine"),
-      meal: String(rest?.meal || "Lunch"),
-      location: String(rest?.location || input.destination),
-      estimatedCost: Number(rest?.estimatedCost) >= 0 ? Number(rest.estimatedCost) : 0,
+      name: String(restRec.name || "Local Bistro"),
+      cuisine: String(restRec.cuisine || "Regional Cuisine"),
+      meal: String(restRec.meal || "Lunch"),
+      location: String(restRec.location || input.destination),
+      estimatedCost: Number(restRec.estimatedCost) >= 0 ? Number(restRec.estimatedCost) : 0,
     };
   });
 
-  const actsCost = activities.reduce((sum: number, a: any) => sum + a.estimatedCost, 0);
-  const restsCost = restaurants.reduce((sum: number, r: any) => sum + r.estimatedCost, 0);
+  const actsCost = (activities as Array<{ estimatedCost: number }>).reduce((sum, a) => sum + a.estimatedCost, 0);
+  const restsCost = (restaurants as Array<{ estimatedCost: number }>).reduce((sum, r) => sum + r.estimatedCost, 0);
   const dailyEstimatedCost = Number(obj.dailyEstimatedCost) >= 0 ? Number(obj.dailyEstimatedCost) : (actsCost + restsCost);
 
   return {

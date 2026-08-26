@@ -2,8 +2,23 @@ import { z } from "zod";
 
 import { accommodationPreferences, currencies, foodPreferences, travelStyles } from "@/lib/planner-options";
 
+export const weatherDataSchema = z.object({
+  date: z.string(),
+  condition: z.string(),
+  weatherCode: z.number().nullable().optional(),
+  temperatureMin: z.number().nullable(),
+  temperatureMax: z.number().nullable(),
+  precipitationProbability: z.number().nullable().optional(),
+  precipitationMm: z.number().nullable().optional(),
+  sunrise: z.string().nullable().optional(),
+  sunset: z.string().nullable().optional(),
+  mode: z.enum(["forecast", "climate_outlook"]),
+  confidence: z.enum(["high", "medium", "low"]),
+});
+
 export const tripRequestSchema = z.object({
   destination: z.string().trim().min(2, "Please enter a destination.").max(120),
+  startDate: z.string().optional(),
   budget: z.coerce.number().positive("Enter a budget greater than zero.").finite(),
   currency: z.enum(currencies),
   duration: z.coerce.number().int().min(1).max(30),
@@ -36,6 +51,7 @@ export const dailyItinerarySchema = z.object({
   activities: z.array(activitySchema),
   restaurants: z.array(restaurantSchema),
   dailyEstimatedCost: z.number().nonnegative(),
+  weather: weatherDataSchema.optional(),
 });
 
 export const itinerarySchema = z.object({
@@ -48,6 +64,7 @@ export const itinerarySchema = z.object({
   travelTips: z.array(z.string().min(1)),
 });
 
+export type WeatherData = z.infer<typeof weatherDataSchema>;
 export type TripRequest = z.infer<typeof tripRequestSchema>;
 export type Activity = z.infer<typeof activitySchema>;
 export type Restaurant = z.infer<typeof restaurantSchema>;

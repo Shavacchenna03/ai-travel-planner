@@ -92,7 +92,7 @@ export function recalculateDaySchedule(activities: Activity[]): Activity[] {
 
 // --- Budget Breakdown Calculation --- //
 
-export function calculateBudgetBreakdown(itinerary: Itinerary, request?: TripRequest): BudgetBreakdown {
+export function calculateBudgetBreakdown(itinerary: Itinerary, _request?: TripRequest): BudgetBreakdown {
   let activities = 0;
   let food = 0;
 

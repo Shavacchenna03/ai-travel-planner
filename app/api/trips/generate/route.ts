@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { generateItinerary, TravelPlannerError } from "@/lib/ai/travel-planner";
 import { prisma } from "@/lib/prisma";
 import { tripRequestSchema } from "@/lib/trip-schema";
+import { getWeatherDataForTrip, type NormalizedWeatherData } from "@/lib/weather";
 
 export const runtime = "nodejs";
 
@@ -26,9 +27,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Please review your trip details and try again.", fieldErrors: parsedInput.error.flatten().fieldErrors }, { status: 400 });
   }
 
+  // 1. Server-side Weather Lookup via Open-Meteo
+  let weatherData: NormalizedWeatherData | null = null;
+  try {
+    weatherData = await getWeatherDataForTrip({
+      destination: parsedInput.data.destination,
+      startDate: parsedInput.data.startDate,
+      duration: parsedInput.data.duration,
+    });
+    console.log(
+      `[Roamly Weather] Destination: ${parsedInput.data.destination} | Mode: ${weatherData.mode} | Days: ${weatherData.days.length} | Confidence: ${weatherData.confidence}`
+    );
+  } catch (weatherErr) {
+    console.warn("[Roamly Weather] Weather unavailable — generating itinerary without weather context:", weatherErr);
+  }
+
+  // 2. AI Itinerary Generation with Weather Context
   let itinerary;
   try {
-    itinerary = await generateItinerary(parsedInput.data);
+    itinerary = await generateItinerary(parsedInput.data, weatherData);
   } catch (error) {
     if (error instanceof TravelPlannerError) {
       console.error(`[Roamly AI Service Error] Code: ${error.code} | Message: ${error.message}`);
@@ -46,6 +63,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Something went wrong while creating your itinerary. Please try again." }, { status: 500 });
   }
 
+  // 3. Attach Normalized Weather to Daily Itineraries
+  if (weatherData && weatherData.mode !== "unavailable" && Array.isArray(weatherData.days)) {
+    itinerary.dailyItinerary = itinerary.dailyItinerary.map((day, idx) => {
+      const wDay = weatherData.days[idx];
+      if (wDay) {
+        return {
+          ...day,
+          weather: {
+            date: wDay.date,
+            condition: wDay.condition,
+            weatherCode: wDay.weatherCode ?? null,
+            temperatureMin: wDay.temperatureMin,
+            temperatureMax: wDay.temperatureMax,
+            precipitationProbability: wDay.precipitationProbability ?? null,
+            precipitationMm: wDay.precipitationMm ?? null,
+            sunrise: wDay.sunrise ?? null,
+            sunset: wDay.sunset ?? null,
+            mode: weatherData.mode as "forecast" | "climate_outlook",
+            confidence: weatherData.confidence,
+          },
+        };
+      }
+      return day;
+    });
+  }
+
+  // 4. Save Trip & Itinerary to PostgreSQL
   try {
     const savedTrip = await prisma.trip.create({
       data: {

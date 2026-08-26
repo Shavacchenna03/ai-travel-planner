@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { Compass, Loader, MapPin, Sparkles, Tag, Users, Utensils } from "@/components/icons";
+import { Calendar, Compass, Loader, MapPin, Sparkles, Tag, Users, Utensils } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { FieldError, FieldLabel, Input, Select } from "@/components/ui/field";
 import { accommodationPreferences, foodPreferences, travelStyles } from "@/lib/planner-options";
@@ -11,6 +11,7 @@ import type { Itinerary, TripRequest } from "@/lib/trip-schema";
 
 type FormValues = {
   destination: string;
+  startDate: string;
   budget: string;
   currency: TripRequest["currency"];
   duration: string;
@@ -24,6 +25,7 @@ type FormErrors = Partial<Record<keyof FormValues, string>>;
 
 const initialValues: FormValues = {
   destination: "",
+  startDate: "",
   budget: "",
   currency: "INR",
   duration: "",
@@ -35,6 +37,7 @@ const initialValues: FormValues = {
 
 const loadingMessages = [
   "Searching destination highlights…",
+  "Checking live weather & climate outlook…",
   "Tailoring activities to your budget…",
   "Optimizing daily travel pace…",
   "Finalizing your personalized itinerary…",
@@ -92,6 +95,7 @@ export function TripPlanningForm() {
     try {
       const requestBody = {
         ...values,
+        startDate: values.startDate ? values.startDate : undefined,
         budget: Number(values.budget),
         duration: Number(values.duration),
         travelers: Number(values.travelers),
@@ -146,19 +150,19 @@ export function TripPlanningForm() {
       <div className="mb-8 pb-6 border-b border-[#eae4d9]">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#ea580c]">
           <Sparkles className="size-4 text-[#f97316]" />
-          <span>Itinerary Creator</span>
+          <span>Weather-Aware Itinerary Creator</span>
         </div>
         <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-[#0f172a]">Trip Details</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Every preference helps personalize recommendations and meal spots.
+          Personalize your journey. Roamly will adapt your activities to live weather & climate trends!
         </p>
       </div>
 
       {/* Form Sections */}
       <div className="space-y-6">
-        {/* Destination & Budget */}
+        {/* Destination & Start Date */}
         <div className="grid gap-5 sm:grid-cols-2">
-          <div className="sm:col-span-2">
+          <div>
             <FieldLabel htmlFor="destination">
               <span className="flex items-center gap-1.5">
                 <MapPin className="size-4 text-[#f97316]" /> Destination
@@ -168,10 +172,27 @@ export function TripPlanningForm() {
               id="destination"
               value={values.destination}
               onChange={update("destination")}
-              placeholder="e.g. Goa, Manali, Jaipur, Kerala"
+              placeholder="e.g. Goa, Tokyo, Paris, Manali"
               aria-invalid={Boolean(errors.destination)}
             />
             <FieldError message={errors.destination} />
+          </div>
+
+          <div>
+            <FieldLabel htmlFor="startDate">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="size-4 text-[#0d9488]" /> Start Date (Optional)
+              </span>
+            </FieldLabel>
+            <Input
+              id="startDate"
+              type="date"
+              value={values.startDate}
+              onChange={update("startDate")}
+            />
+            <p className="mt-1 text-[11px] font-medium text-slate-500">
+              Defaults to 7 days from today for live forecast mode.
+            </p>
           </div>
 
           <div>
@@ -300,7 +321,7 @@ export function TripPlanningForm() {
             <span>{loadingMessages[loadingMessageIndex]}</span>
           </span>
         ) : (
-          "Generate Custom Itinerary"
+          "Generate Weather-Aware Itinerary"
         )}
       </Button>
 

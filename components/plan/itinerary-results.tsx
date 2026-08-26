@@ -8,6 +8,8 @@ import { ActivityEditorModal } from "@/components/plan/activity-editor-modal";
 import { AIRegenerateModal } from "@/components/plan/ai-regenerate-modal";
 import { BudgetBreakdownCard } from "@/components/plan/budget-breakdown-card";
 import { MoveActivityModal } from "@/components/plan/move-activity-modal";
+import { TripWeatherOutlook } from "@/components/plan/trip-weather-outlook";
+import { WeatherIcon } from "@/components/weather-icon";
 import { Button } from "@/components/ui/button";
 import {
   ArrowUpDown,
@@ -37,6 +39,11 @@ import {
   reorderActivityInDay,
 } from "@/lib/itinerary-utils";
 import type { Activity, DailyItinerary, Itinerary, TripRequest } from "@/lib/trip-schema";
+import {
+  getWeatherActivityContext,
+  getWeatherDayInsight,
+  getWeatherWarnings,
+} from "@/lib/weather";
 
 type StoredTrip = { tripId?: string; itinerary: Itinerary; request: TripRequest; createdAt?: string | Date };
 
@@ -88,6 +95,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
     targetTitle: string;
     currentActivity?: Activity;
     currentDay?: DailyItinerary;
+    initialInstruction?: string;
   }>({ isOpen: false, target: "activity", dayNumber: 1, targetTitle: "" });
 
   // Drag and Drop state
@@ -184,11 +192,9 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
     }
 
     if (sourceDay === targetDayNumber) {
-      // Reorder within same day
       const nextItinerary = reorderActivityInDay(itinerary, sourceDay, sourceIndex, targetActivityIndex);
       saveUpdatedItinerary(nextItinerary, `Activity reordered on Day ${sourceDay}`);
     } else {
-      // Move between days
       const nextItinerary = moveActivityBetweenDays(
         itinerary,
         sourceDay,
@@ -271,10 +277,8 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
 
       const nextActivities = [...day.activities];
       if (activityIndex !== undefined && activityIndex >= 0) {
-        // Edit existing activity
         nextActivities[activityIndex] = savedActivity;
       } else {
-        // Add new activity
         nextActivities.push(savedActivity);
       }
 
@@ -316,6 +320,22 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
       activityIndex,
       targetTitle: act.name,
       currentActivity: act,
+      initialInstruction: "",
+    });
+  }
+
+  function handleOpenRegenerateActivityForWeather(dayNumber: number, activityIndex: number, act: Activity) {
+    const targetDayObj = itinerary.dailyItinerary.find((d) => d.day === dayNumber);
+    const insight = getWeatherDayInsight(targetDayObj?.weather);
+
+    setAiModalState({
+      isOpen: true,
+      target: "activity",
+      dayNumber,
+      activityIndex,
+      targetTitle: `${act.name} (Weather Optimized)`,
+      currentActivity: act,
+      initialInstruction: `Replace this activity with an alternative perfectly suited for the expected weather: ${insight}`,
     });
   }
 
@@ -326,11 +346,28 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
       dayNumber,
       targetTitle: `Day ${dayNumber}: ${day.title}`,
       currentDay: day,
+      initialInstruction: "",
+    });
+  }
+
+  function handleOpenRegenerateDayForWeather(dayNumber: number, day: DailyItinerary) {
+    const insight = getWeatherDayInsight(day.weather);
+
+    setAiModalState({
+      isOpen: true,
+      target: "day",
+      dayNumber,
+      targetTitle: `Day ${dayNumber} (Weather Optimized)`,
+      currentDay: day,
+      initialInstruction: `Regenerate this entire day to optimize activities and dining spots for the expected weather: ${insight}`,
     });
   }
 
   async function handleConfirmAIRegenerate(instruction?: string) {
     const { target, dayNumber, activityIndex, currentActivity, currentDay } = aiModalState;
+
+    const targetDayObj = itinerary.dailyItinerary.find((d) => d.day === dayNumber);
+    const dayWeather = targetDayObj?.weather ?? currentDay?.weather ?? null;
 
     const response = await fetch("/api/trips/regenerate", {
       method: "POST",
@@ -341,6 +378,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
         dayNumber,
         currentActivity,
         currentDay,
+        dayWeather,
         instruction,
       }),
     });
@@ -483,6 +521,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
         target={aiModalState.target}
         targetTitle={aiModalState.targetTitle}
         dayNumber={aiModalState.dayNumber}
+        initialInstruction={aiModalState.initialInstruction}
       />
 
       {/* Delete Confirmation Modal */}
@@ -644,246 +683,352 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
           )}
         </div>
 
+        {/* Trip Weather Outlook Hero Card */}
+        <div className="mt-8">
+          <TripWeatherOutlook dailyItinerary={itinerary.dailyItinerary} />
+        </div>
+
         {/* Main Grid: Days vs Sidebar */}
         <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_20rem]">
           {/* Day Cards Stack */}
           <div className="space-y-8">
-            {itinerary.dailyItinerary.map((day) => (
-              <article key={day.day} className="card-warm p-6 sm:p-8 bg-white">
-                {/* Day Header & Actions */}
-                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#eae4d9] pb-5">
-                  <div>
-                    <span className="text-xs font-extrabold tracking-widest text-[#ea580c] uppercase">
-                      DAY {day.day}
-                    </span>
-                    <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#0f172a]">
-                      {day.title}
-                    </h2>
-                  </div>
+            {itinerary.dailyItinerary.map((day) => {
+              const dayInsight = getWeatherDayInsight(day.weather);
+              const warnings = getWeatherWarnings(day.weather);
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="shrink-0 rounded-xl bg-[#ffedd5] px-3.5 py-1.5 text-xs font-extrabold text-[#ea580c] border border-[#fed7aa]">
-                      {formatCurrency(day.dailyEstimatedCost, currency)}
-                    </span>
-                    
-                    {/* Day Action Buttons */}
-                    <Button
-                      onClick={() => handleOpenAddActivity(day.day)}
-                      size="sm"
-                      className="bg-[#f5f2ec] hover:bg-[#eae4d9] text-slate-700 text-xs font-bold rounded-xl border border-[#eae4d9]"
-                    >
-                      <Plus className="size-3.5 text-[#0d9488]" />
-                      <span>Add Activity</span>
-                    </Button>
+              return (
+                <article key={day.day} className="card-warm p-6 sm:p-8 bg-white">
+                  {/* Day Header & Actions */}
+                  <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#eae4d9] pb-5">
+                    <div className="flex-1">
+                      <span className="text-xs font-extrabold tracking-widest text-[#ea580c] uppercase">
+                        DAY {day.day}
+                      </span>
+                      <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#0f172a]">
+                        {day.title}
+                      </h2>
 
-                    <Button
-                      onClick={() => handleOpenRegenerateDay(day.day, day)}
-                      size="sm"
-                      className="bg-[#ffedd5] hover:bg-[#fed7aa] text-[#ea580c] text-xs font-bold rounded-xl border border-[#fed7aa]"
-                    >
-                      <Sparkles className="size-3.5 text-[#ea580c]" />
-                      <span>Regenerate Day</span>
-                    </Button>
-                  </div>
-                </div>
+                      {/* Weather Insights & Warnings Box */}
+                      {day.weather && (
+                        <div className="mt-3 space-y-2">
+                          {/* Compact Weather Badge */}
+                          <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl bg-[#faf8f5] px-3.5 py-2 border border-[#eae4d9] shadow-xs">
+                            <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#0f172a]">
+                              <WeatherIcon
+                                weatherCode={day.weather.weatherCode}
+                                condition={day.weather.condition}
+                                className="size-4 text-[#ea580c]"
+                              />
+                              <span>{day.weather.condition}</span>
+                            </div>
 
-                {/* Explore / Activities Section with Drag & Drop Dropzone */}
-                <div className="mt-6 space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Compass className="size-4 text-[#ea580c]" />
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                        Explore Activities ({day.activities.length})
-                      </h3>
+                            {day.weather.temperatureMin != null && day.weather.temperatureMax != null && (
+                              <span className="rounded-lg bg-white px-2 py-0.5 text-xs font-black text-[#0f172a] border border-[#eae4d9]">
+                                {day.weather.temperatureMin}° – {day.weather.temperatureMax}°C
+                              </span>
+                            )}
+
+                            {day.weather.precipitationProbability != null && day.weather.precipitationProbability > 0 && (
+                              <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-extrabold text-blue-700 border border-blue-200">
+                                💧 {day.weather.precipitationProbability}% rain
+                              </span>
+                            )}
+
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${
+                                day.weather.mode === "forecast"
+                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  : "bg-amber-100 text-amber-800 border border-amber-300"
+                              }`}
+                            >
+                              {day.weather.mode === "forecast" ? "Forecast" : "Typical Conditions"}
+                            </span>
+                          </div>
+
+                          {/* Weather Insight Sentence & Warning Indicators */}
+                          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
+                            <span className="text-[#0d9488] font-bold">💡 {dayInsight}</span>
+                            {warnings.map((w) => (
+                              <span
+                                key={w.id}
+                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold border ${
+                                  w.severity === "high"
+                                    ? "bg-rose-100 text-rose-800 border-rose-300"
+                                    : w.severity === "medium"
+                                    ? "bg-amber-100 text-amber-800 border-amber-300"
+                                    : "bg-blue-100 text-blue-800 border-blue-300"
+                                }`}
+                              >
+                                <span>{w.icon}</span>
+                                <span>{w.label}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
 
-                  {day.activities.length === 0 ? (
-                    <div
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => handleDropOnEmptyDay(e, day.day)}
-                      className="rounded-2xl border-2 border-dashed border-[#eae4d9] bg-[#faf8f5] p-8 text-center transition-colors hover:border-[#ea580c] hover:bg-[#fff7ed]"
-                    >
-                      <p className="text-xs font-bold text-slate-500">
-                        No activities planned for this day. Drag an activity here or add one below.
-                      </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="shrink-0 rounded-xl bg-[#ffedd5] px-3.5 py-1.5 text-xs font-extrabold text-[#ea580c] border border-[#fed7aa]">
+                        {formatCurrency(day.dailyEstimatedCost, currency)}
+                      </span>
+
+                      {/* Day Action Buttons */}
                       <Button
                         onClick={() => handleOpenAddActivity(day.day)}
                         size="sm"
-                        className="mt-3 bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs font-bold rounded-xl"
+                        className="bg-[#f5f2ec] hover:bg-[#eae4d9] text-slate-700 text-xs font-bold rounded-xl border border-[#eae4d9]"
                       >
-                        <Plus className="size-3.5" />
+                        <Plus className="size-3.5 text-[#0d9488]" />
                         <span>Add Activity</span>
                       </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {day.activities.map((activity, idx) => {
-                        const isDropTarget = dropTarget?.dayNumber === day.day && dropTarget?.activityIndex === idx;
-                        const isBeingDragged = draggedItem?.dayNumber === day.day && draggedItem?.activityIndex === idx;
 
-                        return (
-                          <div
-                            key={`${day.day}-${activity.name}-${idx}`}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, day.day, idx)}
-                            onDragOver={(e) => handleDragOver(e, day.day, idx)}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, day.day, idx)}
-                            className={`group relative rounded-2xl border-l-4 border-[#ea580c] bg-[#faf8f5] p-4 sm:p-5 border border-[#eae4d9] transition-all duration-200 ${
-                              isBeingDragged ? "opacity-40 border-dashed scale-98" : "hover:bg-white hover:shadow-md"
-                            } ${isDropTarget ? "border-t-4 border-t-[#ea580c] ring-2 ring-[#ffedd5] bg-[#fff7ed]" : ""}`}
-                          >
-                            {/* Card Header & Drag Handle + Controls */}
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <div className="flex items-center gap-2 flex-1">
-                                {/* Drag Handle */}
-                                <div
-                                  className="cursor-grab active:cursor-grabbing p-1 rounded-lg text-slate-400 hover:text-[#ea580c] hover:bg-slate-200 transition-colors"
-                                  title="Drag to reorder or move to another day"
-                                >
-                                  <GripVertical className="size-4" />
-                                </div>
+                      <Button
+                        onClick={() => handleOpenRegenerateDay(day.day, day)}
+                        size="sm"
+                        className="bg-[#ffedd5] hover:bg-[#fed7aa] text-[#ea580c] text-xs font-bold rounded-xl border border-[#fed7aa]"
+                      >
+                        <Sparkles className="size-3.5 text-[#ea580c]" />
+                        <span>Regenerate Day</span>
+                      </Button>
 
-                                <h4 className="text-base font-bold text-[#0f172a]">{activity.name}</h4>
-                              </div>
-
-                              {/* Controls toolbar */}
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-sm font-extrabold text-[#ea580c] mr-2">
-                                  {formatCurrency(activity.estimatedCost, currency)}
-                                </span>
-
-                                {/* Move Up / Move Down Touch buttons */}
-                                <button
-                                  type="button"
-                                  disabled={idx === 0}
-                                  onClick={() => handleMoveUp(day.day, idx)}
-                                  title="Move Up"
-                                  className="rounded-lg p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                                >
-                                  <ChevronUp className="size-3.5" />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  disabled={idx === day.activities.length - 1}
-                                  onClick={() => handleMoveDown(day.day, idx)}
-                                  title="Move Down"
-                                  className="rounded-lg p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                                >
-                                  <ChevronDown className="size-3.5" />
-                                </button>
-
-                                {/* Move to Day Modal Button */}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setMoveModalState({
-                                      isOpen: true,
-                                      dayNumber: day.day,
-                                      activityIndex: idx,
-                                      activity,
-                                    })
-                                  }
-                                  title="Move to another Day..."
-                                  className="rounded-lg p-1 text-[#0d9488] hover:bg-teal-50 transition-colors"
-                                >
-                                  <ArrowUpDown className="size-3.5" />
-                                </button>
-
-                                {/* Edit Activity */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenEditActivity(day.day, idx, activity)}
-                                  title="Edit Activity"
-                                  className="rounded-lg px-2 py-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors text-xs font-bold"
-                                >
-                                  Edit
-                                </button>
-
-                                {/* AI Regenerate Activity */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenRegenerateActivity(day.day, idx, activity)}
-                                  title="Regenerate with AI"
-                                  className="rounded-lg p-1.5 text-[#ea580c] hover:bg-[#ffedd5] transition-colors"
-                                >
-                                  <Sparkles className="size-3.5" />
-                                </button>
-
-                                {/* Delete Activity */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteActivity(day.day, idx)}
-                                  title="Delete Activity"
-                                  className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-100 transition-colors"
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Meta Info */}
-                            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-500 pl-6">
-                              <span className="inline-flex items-center gap-1">
-                                <Clock className="size-3.5 text-slate-400" />
-                                {activity.startTime} ({activity.duration})
-                              </span>
-                              <span className="inline-flex items-center gap-1">
-                                <MapPin className="size-3.5 text-slate-400" />
-                                {activity.location}
-                              </span>
-                            </div>
-
-                            <p className="mt-3 text-sm leading-relaxed text-slate-600 pl-6">
-                              {activity.description}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Eat Well / Dining Section */}
-                {day.restaurants && day.restaurants.length > 0 && (
-                  <div className="mt-8 rounded-2xl border border-[#fef3c7] bg-[#fffbeb] p-5 sm:p-6">
-                    <div className="flex items-center gap-2">
-                      <Utensils className="size-4 text-[#d97706]" />
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#d97706]">
-                        Dining & Local Flavors
-                      </h3>
-                    </div>
-
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      {day.restaurants.map((restaurant, idx) => (
-                        <div
-                          key={`${day.day}-${restaurant.name}-${idx}`}
-                          className="rounded-xl bg-white p-4 border border-[#fde68a] shadow-xs"
+                      {/* Regenerate for Weather */}
+                      {day.weather && (
+                        <Button
+                          onClick={() => handleOpenRegenerateDayForWeather(day.day, day)}
+                          size="sm"
+                          className="bg-teal-50 hover:bg-teal-100 text-[#0d9488] text-xs font-bold rounded-xl border border-teal-200"
+                          title="Regenerate this day optimized for weather"
                         >
-                          <div className="flex items-baseline justify-between gap-2">
-                            <h4 className="font-bold text-[#0f172a] text-sm">
-                              {restaurant.name}
-                            </h4>
-                            <span className="shrink-0 text-xs font-bold text-[#d97706]">
-                              {formatCurrency(restaurant.estimatedCost, currency)}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs font-semibold text-slate-600">
-                            {restaurant.meal} · {restaurant.cuisine}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500 inline-flex items-center gap-1">
-                            <MapPin className="size-3 text-slate-400" />
-                            {restaurant.location}
-                          </p>
-                        </div>
-                      ))}
+                          <WeatherIcon weatherCode={day.weather.weatherCode} condition={day.weather.condition} className="size-3.5 text-[#0d9488]" />
+                          <span>Regenerate for Weather</span>
+                        </Button>
+                      )}
                     </div>
                   </div>
-                )}
-              </article>
-            ))}
+
+                  {/* Explore / Activities Section with Drag & Drop Dropzone */}
+                  <div className="mt-6 space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Compass className="size-4 text-[#ea580c]" />
+                        <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                          Explore Activities ({day.activities.length})
+                        </h3>
+                      </div>
+                    </div>
+
+                    {day.activities.length === 0 ? (
+                      <div
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => handleDropOnEmptyDay(e, day.day)}
+                        className="rounded-2xl border-2 border-dashed border-[#eae4d9] bg-[#faf8f5] p-8 text-center transition-colors hover:border-[#ea580c] hover:bg-[#fff7ed]"
+                      >
+                        <p className="text-xs font-bold text-slate-500">
+                          No activities planned for this day. Drag an activity here or add one below.
+                        </p>
+                        <Button
+                          onClick={() => handleOpenAddActivity(day.day)}
+                          size="sm"
+                          className="mt-3 bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs font-bold rounded-xl"
+                        >
+                          <Plus className="size-3.5" />
+                          <span>Add Activity</span>
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {day.activities.map((activity, idx) => {
+                          const isDropTarget = dropTarget?.dayNumber === day.day && dropTarget?.activityIndex === idx;
+                          const isBeingDragged = draggedItem?.dayNumber === day.day && draggedItem?.activityIndex === idx;
+
+                          // Deterministic activity weather attribution
+                          const activityWeatherContext = getWeatherActivityContext(activity, day.weather);
+
+                          return (
+                            <div
+                              key={`${day.day}-${activity.name}-${idx}`}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, day.day, idx)}
+                              onDragOver={(e) => handleDragOver(e, day.day, idx)}
+                              onDragLeave={handleDragLeave}
+                              onDrop={(e) => handleDrop(e, day.day, idx)}
+                              className={`group relative rounded-2xl border-l-4 border-[#ea580c] bg-[#faf8f5] p-4 sm:p-5 border border-[#eae4d9] transition-all duration-200 ${
+                                isBeingDragged ? "opacity-40 border-dashed scale-98" : "hover:bg-white hover:shadow-md"
+                              } ${isDropTarget ? "border-t-4 border-t-[#ea580c] ring-2 ring-[#ffedd5] bg-[#fff7ed]" : ""}`}
+                            >
+                              {/* Card Header & Drag Handle + Controls */}
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-1">
+                                  {/* Drag Handle */}
+                                  <div
+                                    className="cursor-grab active:cursor-grabbing p-1 rounded-lg text-slate-400 hover:text-[#ea580c] hover:bg-slate-200 transition-colors"
+                                    title="Drag to reorder or move to another day"
+                                  >
+                                    <GripVertical className="size-4" />
+                                  </div>
+
+                                  <div>
+                                    <h4 className="text-base font-bold text-[#0f172a]">{activity.name}</h4>
+
+                                    {/* Deterministic "Why this activity?" Weather Attribution Tag */}
+                                    {activityWeatherContext && (
+                                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#f0fdf4] px-2.5 py-0.5 text-[11px] font-extrabold text-[#166534] border border-[#bbf7d0]">
+                                        {activityWeatherContext}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Controls toolbar */}
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className="text-sm font-extrabold text-[#ea580c] mr-2">
+                                    {formatCurrency(activity.estimatedCost, currency)}
+                                  </span>
+
+                                  {/* Move Up / Move Down Touch buttons */}
+                                  <button
+                                    type="button"
+                                    disabled={idx === 0}
+                                    onClick={() => handleMoveUp(day.day, idx)}
+                                    title="Move Up"
+                                    className="rounded-lg p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                  >
+                                    <ChevronUp className="size-3.5" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={idx === day.activities.length - 1}
+                                    onClick={() => handleMoveDown(day.day, idx)}
+                                    title="Move Down"
+                                    className="rounded-lg p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                  >
+                                    <ChevronDown className="size-3.5" />
+                                  </button>
+
+                                  {/* Move to Day Modal Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setMoveModalState({
+                                        isOpen: true,
+                                        dayNumber: day.day,
+                                        activityIndex: idx,
+                                        activity,
+                                      })
+                                    }
+                                    title="Move to another Day..."
+                                    className="rounded-lg p-1 text-[#0d9488] hover:bg-teal-50 transition-colors"
+                                  >
+                                    <ArrowUpDown className="size-3.5" />
+                                  </button>
+
+                                  {/* Edit Activity */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditActivity(day.day, idx, activity)}
+                                    title="Edit Activity"
+                                    className="rounded-lg px-2 py-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors text-xs font-bold"
+                                  >
+                                    Edit
+                                  </button>
+
+                                  {/* Standard AI Regenerate Activity */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenRegenerateActivity(day.day, idx, activity)}
+                                    title="Regenerate with AI"
+                                    className="rounded-lg p-1.5 text-[#ea580c] hover:bg-[#ffedd5] transition-colors"
+                                  >
+                                    <Sparkles className="size-3.5" />
+                                  </button>
+
+                                  {/* Regenerate for Weather Activity */}
+                                  {day.weather && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenRegenerateActivityForWeather(day.day, idx, activity)}
+                                      title="Regenerate Activity optimized for weather"
+                                      className="rounded-lg px-2 py-1 bg-teal-50 text-[#0d9488] hover:bg-teal-100 transition-colors text-xs font-bold border border-teal-200"
+                                    >
+                                      Weather Alt
+                                    </button>
+                                  )}
+
+                                  {/* Delete Activity */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteActivity(day.day, idx)}
+                                    title="Delete Activity"
+                                    className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-100 transition-colors"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Meta Info */}
+                              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-500 pl-6">
+                                <span className="inline-flex items-center gap-1">
+                                  <Clock className="size-3.5 text-slate-400" />
+                                  {activity.startTime} ({activity.duration})
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <MapPin className="size-3.5 text-slate-400" />
+                                  {activity.location}
+                                </span>
+                              </div>
+
+                              <p className="mt-3 text-sm leading-relaxed text-slate-600 pl-6">
+                                {activity.description}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Eat Well / Dining Section */}
+                  {day.restaurants && day.restaurants.length > 0 && (
+                    <div className="mt-8 rounded-2xl border border-[#fef3c7] bg-[#fffbeb] p-5 sm:p-6">
+                      <div className="flex items-center gap-2">
+                        <Utensils className="size-4 text-[#d97706]" />
+                        <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#d97706]">
+                          Dining & Local Flavors
+                        </h3>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        {day.restaurants.map((restaurant, idx) => (
+                          <div
+                            key={`${day.day}-${restaurant.name}-${idx}`}
+                            className="rounded-xl bg-white p-4 border border-[#fde68a] shadow-xs"
+                          >
+                            <div className="flex items-baseline justify-between gap-2">
+                              <h4 className="font-bold text-[#0f172a] text-sm">
+                                {restaurant.name}
+                              </h4>
+                              <span className="shrink-0 text-xs font-bold text-[#d97706]">
+                                {formatCurrency(restaurant.estimatedCost, currency)}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs font-semibold text-slate-600">
+                              {restaurant.meal} · {restaurant.cuisine}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500 inline-flex items-center gap-1">
+                              <MapPin className="size-3 text-slate-400" />
+                              {restaurant.location}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
 
           {/* Sidebar */}

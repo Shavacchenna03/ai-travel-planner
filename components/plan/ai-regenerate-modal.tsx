@@ -11,6 +11,7 @@ type AIRegenerateModalProps = {
   target: "activity" | "day";
   targetTitle: string;
   dayNumber: number;
+  initialInstruction?: string;
 };
 
 export function AIRegenerateModal({
@@ -20,18 +21,28 @@ export function AIRegenerateModal({
   target,
   targetTitle,
   dayNumber,
+  initialInstruction = "",
 }: AIRegenerateModalProps) {
-  const [instruction, setInstruction] = useState("");
+  const [customInstruction, setCustomInstruction] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   if (!isOpen) return null;
+
+  const instruction = customInstruction ?? initialInstruction;
+
+  function handleClose() {
+    setCustomInstruction(null);
+    setError("");
+    onClose();
+  }
 
   async function handleRegenerate() {
     setIsSubmitting(true);
     setError("");
     try {
       await onConfirm(instruction.trim() || undefined);
+      setCustomInstruction(null);
       onClose();
     } catch (err: unknown) {
       console.error("AI Regeneration Error:", err);
@@ -71,13 +82,13 @@ export function AIRegenerateModal({
 
         <div className="mt-4">
           <label htmlFor="ai-instruction" className="block text-xs font-bold text-[#0f172a] mb-1.5">
-            Optional Instructions for AI
+            Instructions for AI
           </label>
           <textarea
             id="ai-instruction"
             rows={3}
             value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
+            onChange={(e) => setCustomInstruction(e.target.value)}
             disabled={isSubmitting}
             placeholder={
               target === "activity"
@@ -91,7 +102,7 @@ export function AIRegenerateModal({
         <div className="mt-6 flex items-center justify-end gap-3 border-t border-[#eae4d9] pt-4">
           <Button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isSubmitting}
             className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
           >

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { regenerateActivity, regenerateDay, TravelPlannerError } from "@/lib/ai/travel-planner";
-import { activitySchema, dailyItinerarySchema, tripRequestSchema } from "@/lib/trip-schema";
+import { activitySchema, dailyItinerarySchema, tripRequestSchema, weatherDataSchema } from "@/lib/trip-schema";
 
 export const runtime = "nodejs";
 
@@ -13,11 +13,17 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { target, request: tripReq, dayNumber, instruction } = body;
+    const { target, request: tripReq, dayNumber, instruction, dayWeather } = body;
 
     const requestValidation = tripRequestSchema.safeParse(tripReq);
     if (!requestValidation.success) {
       return NextResponse.json({ error: "Invalid trip request context." }, { status: 400 });
+    }
+
+    let parsedDayWeather = null;
+    if (dayWeather) {
+      const wValid = weatherDataSchema.safeParse(dayWeather);
+      if (wValid.success) parsedDayWeather = wValid.data;
     }
 
     if (target === "activity") {
@@ -30,6 +36,7 @@ export async function POST(request: Request) {
         request: requestValidation.data,
         dayNumber: Number(dayNumber),
         currentActivity: activityValidation.data,
+        dayWeather: parsedDayWeather,
         instruction: typeof instruction === "string" ? instruction.trim() : undefined,
       });
 
@@ -46,8 +53,14 @@ export async function POST(request: Request) {
         request: requestValidation.data,
         dayNumber: Number(dayNumber),
         currentDay: dayValidation.data,
+        dayWeather: parsedDayWeather ?? dayValidation.data.weather ?? null,
         instruction: typeof instruction === "string" ? instruction.trim() : undefined,
       });
+
+      // Preserve existing day weather if present
+      if (dayValidation.data.weather) {
+        newDay.weather = dayValidation.data.weather;
+      }
 
       return NextResponse.json({ success: true, day: newDay });
     }

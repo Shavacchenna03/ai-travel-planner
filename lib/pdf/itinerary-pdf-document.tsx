@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import type { Itinerary, TripRequest } from "@/lib/trip-schema";
 import { formatCurrency } from "@/lib/formatters";
+import { getTripWeatherSummary } from "@/lib/weather";
 
 // Define PDF styles
 const styles = StyleSheet.create({
@@ -88,6 +89,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Helvetica-Bold",
   },
+  weatherPdfBox: {
+    backgroundColor: "#e7f2ef",
+    borderRadius: 6,
+    padding: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#cae2dc",
+    borderStyle: "solid",
+  },
+  weatherPdfTitle: {
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: "#187764",
+    marginBottom: 3,
+  },
+  weatherPdfText: {
+    fontSize: 9,
+    color: "#334155",
+    lineHeight: 1.4,
+  },
+  weatherPdfDisclosure: {
+    fontSize: 7.5,
+    color: "#64748b",
+    marginTop: 4,
+    fontFamily: "Helvetica-Oblique",
+  },
   summaryText: {
     fontSize: 10,
     color: "#334155",
@@ -142,6 +169,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: "Helvetica-Bold",
     color: "#187764",
+  },
+  weatherSubtext: {
+    fontSize: 8.5,
+    color: "#0d9488",
+    fontFamily: "Helvetica-Bold",
+    marginTop: 2,
+    marginBottom: 6,
+    paddingHorizontal: 14,
   },
   dayContent: {
     padding: 12,
@@ -292,6 +327,7 @@ type ItineraryPdfDocumentProps = {
 
 export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumentProps) {
   const currency = itinerary.currency || request.currency || "INR";
+  const weatherSummary = getTripWeatherSummary(itinerary.dailyItinerary);
 
   return (
     <Document title={`Roamly Itinerary - ${itinerary.destination}`}>
@@ -322,6 +358,20 @@ export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumen
             <Text style={styles.costValue}>{formatCurrency(itinerary.estimatedTotalCost, currency)}</Text>
           </View>
 
+          {/* Trip Weather Outlook PDF Box */}
+          {weatherSummary.mode !== "unavailable" && (
+            <View style={styles.weatherPdfBox}>
+              <Text style={styles.weatherPdfTitle}>{weatherSummary.title} ({weatherSummary.conditionSummary})</Text>
+              <Text style={styles.weatherPdfText}>
+                Temperatures: {weatherSummary.tempMin}°C – {weatherSummary.tempMax}°C · {weatherSummary.rainLikelihoodText}
+              </Text>
+              <Text style={styles.weatherPdfText}>
+                Recommendation: {weatherSummary.recommendation}
+              </Text>
+              <Text style={styles.weatherPdfDisclosure}>{weatherSummary.disclosure}</Text>
+            </View>
+          )}
+
           {itinerary.summary && (
             <Text style={styles.summaryText}>{itinerary.summary}</Text>
           )}
@@ -340,6 +390,16 @@ export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumen
               </View>
               <Text style={styles.dayCost}>{formatCurrency(day.dailyEstimatedCost, currency)}</Text>
             </View>
+
+            {/* Weather Subtext */}
+            {day.weather && (
+              <Text style={styles.weatherSubtext}>
+                Weather: {day.weather.condition} ({day.weather.temperatureMin ?? 'N/A'}°C to {day.weather.temperatureMax ?? 'N/A'}°C
+                {day.weather.precipitationProbability != null && day.weather.precipitationProbability > 0
+                  ? ` · ${day.weather.precipitationProbability}% rain`
+                  : ""}) · {day.weather.mode === "forecast" ? "Forecast" : "Typical Conditions"}
+              </Text>
+            )}
 
             <View style={styles.dayContent}>
               {/* Activities */}
