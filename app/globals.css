@@ -1,10 +1,81 @@
 @import "tailwindcss";
 
-:root { --background: #f7f5f1; --foreground: #16324f; }
+:root {
+  --background: #faf8f5;
+  --foreground: #0f172a;
+  --coral-primary: #f97316;
+  --coral-dark: #ea580c;
+  --teal-secondary: #0d9488;
+  --teal-dark: #0f766e;
+  --gold-accent: #f59e0b;
+  --border-warm: #eae4d9;
+}
 
-@theme inline { --color-background: var(--background); --color-foreground: var(--foreground); --font-sans: Arial, Helvetica, sans-serif; }
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
 
-* { border-color: #e2e8f0; }
-html { scroll-behavior: smooth; }
-body { min-height: 100vh; background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
-::selection { background: #b6e1d8; color: #102a43; }
+* {
+  border-color: var(--border-warm);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+/* Custom Card Elevation Utilities */
+.card-warm {
+  background-color: #ffffff;
+  border: 1px solid var(--border-warm);
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 30px -15px rgba(15, 23, 42, 0.06);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-warm:hover {
+  box-shadow: 0 20px 40px -15px rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+/* Continuous Infinite Marquee Animation for Destination Gallery */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 35s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee {
+    animation: none !important;
+  }
+}

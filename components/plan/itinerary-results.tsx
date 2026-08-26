@@ -58,10 +58,9 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
     } catch (err) {
       console.error("PDF download failed:", err);
-      setDownloadError("Could not generate PDF document. Please try again.");
+      setDownloadError("Could not generate PDF. Please try again.");
     } finally {
       setIsDownloading(false);
     }
@@ -72,69 +71,63 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
     setIsDeleting(true);
     setDeleteError("");
     try {
-      const res = await fetch(`/api/trips/${tripId}`, { method: "DELETE" });
+      const res = await fetch(`/api/trips/${tripId}`, {
+        method: "DELETE",
+      });
+
       if (!res.ok) {
-        const payload = await res.json();
-        throw new Error(payload.error || "Failed to delete trip");
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete trip");
       }
-      if (typeof window !== "undefined") {
-        const raw = sessionStorage.getItem("roamly-current-itinerary");
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            if (parsed.tripId === tripId) {
-              sessionStorage.removeItem("roamly-current-itinerary");
-              window.dispatchEvent(new Event("roamly-storage-update"));
-            }
-          } catch {
-            // ignore
-          }
-        }
-      }
+
+      sessionStorage.removeItem("roamly-current-itinerary");
+      localStorage.removeItem("roamly-current-itinerary");
+      window.dispatchEvent(new Event("roamly-storage-update"));
+
       router.push("/trips");
       router.refresh();
-    } catch (err) {
-      console.error("Delete failed:", err);
-      setDeleteError(err instanceof Error ? err.message : "Could not delete trip.");
+    } catch (err: unknown) {
+      console.error("Delete trip failed:", err);
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete trip.");
       setIsDeleting(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f5f1] pb-20 text-slate-800">
+    <main className="min-h-screen bg-[#faf8f5] pb-20 text-[#0f172a] font-sans">
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-[#eae4d9] bg-white p-6 sm:p-8 shadow-2xl">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
               <Trash2 className="size-6" />
             </div>
-            <h2 className="mt-4 text-xl font-bold text-[#16324f]">Delete trip itinerary?</h2>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              Are you sure you want to delete this trip to <strong className="font-semibold text-slate-900">{itinerary.destination}</strong>? This action will remove the record from your database permanently.
+            <h3 className="mt-4 text-xl font-bold text-[#0f172a]">Delete this trip?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Are you sure you want to delete your trip to <strong className="text-[#0f172a]">{itinerary.destination}</strong>? This action cannot be undone.
             </p>
 
             {deleteError && (
-              <div role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+              <div role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700 border border-rose-200">
                 {deleteError}
               </div>
             )}
 
-            <div className="mt-6 flex flex-wrap justify-end gap-3">
+            <div className="mt-6 flex items-center justify-end gap-3">
               <Button
-                disabled={isDeleting}
                 onClick={() => {
                   setShowDeleteModal(false);
                   setDeleteError("");
                 }}
-                className="border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                disabled={isDeleting}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
               >
                 Cancel
               </Button>
               <Button
-                disabled={isDeleting}
                 onClick={handleDeleteTrip}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={isDeleting}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold"
               >
                 {isDeleting ? (
                   <>
@@ -150,13 +143,13 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
         </div>
       )}
 
-      {/* Top Header */}
+      {/* Navigation Header */}
       <NavigationHeader />
 
       {/* Main Content Container */}
       <section className="mx-auto max-w-6xl px-6 pt-8 sm:px-10">
         {downloadError && (
-          <div role="alert" className="mb-6 rounded-2xl bg-red-50 p-4 text-sm text-red-700 border border-red-200 flex items-center justify-between">
+          <div role="alert" className="mb-6 rounded-2xl bg-rose-50 p-4 text-sm text-rose-700 border border-rose-200 flex items-center justify-between">
             <span>{downloadError}</span>
             <button onClick={() => setDownloadError("")} className="font-bold underline text-xs">Dismiss</button>
           </div>
@@ -166,7 +159,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <Link
             href="/trips"
-            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors hover:text-[#16324f]"
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors hover:text-[#ea580c]"
           >
             ← Back to Saved Trips
           </Link>
@@ -174,7 +167,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
             {canDelete && (
               <Button
                 onClick={() => setShowDeleteModal(true)}
-                className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 shadow-2xs text-xs font-bold"
+                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl"
               >
                 <Trash2 className="size-4" />
                 <span>Delete Trip</span>
@@ -183,7 +176,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
             <Button
               onClick={handleDownloadPdf}
               disabled={isDownloading}
-              className="bg-[#187764] hover:bg-[#126653] text-white shadow-xs text-xs font-bold"
+              className="bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white shadow-md shadow-orange-500/20 text-xs font-extrabold rounded-xl"
             >
               {isDownloading ? (
                 <>
@@ -201,9 +194,9 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
         </div>
 
         {/* Hero Banner / Trip Info */}
-        <div className="rounded-3xl border border-[#e8e3db] bg-white p-6 sm:p-10 shadow-[0_18px_55px_-35px_rgba(22,50,79,0.25)]">
+        <div className="card-warm p-6 sm:p-10 bg-white">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e7f2ef] px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-[#187764]">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ffedd5] px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-[#ea580c] border border-[#fed7aa]">
               <Sparkles className="size-3.5" />
               {trip.createdAt
                 ? `Saved Trip · ${new Date(trip.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
@@ -211,26 +204,26 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
             </span>
           </div>
 
-          <div className="mt-4 flex flex-col justify-between gap-6 border-b border-[#e4dfd6] pb-8 md:flex-row md:items-end">
+          <div className="mt-4 flex flex-col justify-between gap-6 border-b border-[#eae4d9] pb-8 md:flex-row md:items-end">
             <div>
-              <h1 className="text-4xl font-bold tracking-tight text-[#16324f] sm:text-5xl">
+              <h1 className="text-4xl font-extrabold tracking-tight text-[#0f172a] sm:text-5xl">
                 {itinerary.destination}
               </h1>
-              <p className="mt-2 text-base text-slate-600 font-medium">{itinerary.country}</p>
+              <p className="mt-1 text-base text-[#0d9488] font-bold">{itinerary.country}</p>
 
               {/* Trip Parameters Badges */}
               <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm font-semibold text-slate-700">
-                <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-1.5 text-slate-700 border border-slate-200">
-                  <Calendar className="size-4 text-[#187764]" />
+                <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f2ec] px-3 py-1.5 text-slate-700 border border-[#eae4d9]">
+                  <Calendar className="size-4 text-[#ea580c]" />
                   {request.duration} Days
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-1.5 text-slate-700 border border-slate-200">
-                  <Users className="size-4 text-[#187764]" />
+                <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f2ec] px-3 py-1.5 text-slate-700 border border-[#eae4d9]">
+                  <Users className="size-4 text-[#0d9488]" />
                   {request.travelers} {request.travelers === 1 ? "Traveler" : "Travelers"}
                 </span>
                 {request.style && (
-                  <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-1.5 text-slate-700 border border-slate-200">
-                    <Tag className="size-4 text-[#187764]" />
+                  <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f2ec] px-3 py-1.5 text-slate-700 border border-[#eae4d9]">
+                    <Tag className="size-4 text-[#f59e0b]" />
                     {request.style}
                   </span>
                 )}
@@ -238,14 +231,14 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
             </div>
 
             {/* Estimated Total Cost Card */}
-            <div className="w-full md:w-auto shrink-0 rounded-2xl bg-[#16324f] p-6 text-white shadow-md">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+            <div className="w-full md:w-auto shrink-0 rounded-2xl bg-gradient-to-br from-[#ea580c] via-[#f97316] to-[#d97706] p-6 text-white shadow-lg shadow-orange-500/20">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-orange-100">
                 Estimated Total Cost
               </p>
-              <p className="mt-1 text-3xl font-bold tracking-tight text-white">
+              <p className="mt-1 text-3xl font-black tracking-tight text-white">
                 {formatCurrency(itinerary.estimatedTotalCost, currency)}
               </p>
-              <p className="mt-1 text-xs text-slate-300">For all {request.travelers} traveler(s)</p>
+              <p className="mt-1 text-xs text-orange-100">For all {request.travelers} traveler(s)</p>
             </div>
           </div>
 
@@ -262,21 +255,18 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
           {/* Day Cards Stack */}
           <div className="space-y-8">
             {itinerary.dailyItinerary.map((day) => (
-              <article
-                key={day.day}
-                className="rounded-3xl border border-[#e8e3db] bg-white p-6 sm:p-8 shadow-[0_18px_55px_-38px_rgba(22,50,79,0.3)] transition-all hover:shadow-[0_22px_60px_-35px_rgba(22,50,79,0.35)]"
-              >
+              <article key={day.day} className="card-warm p-6 sm:p-8 bg-white">
                 {/* Day Header */}
-                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#f0ece5] pb-5">
+                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#eae4d9] pb-5">
                   <div>
-                    <span className="text-xs font-bold tracking-widest text-[#187764] uppercase">
+                    <span className="text-xs font-extrabold tracking-widest text-[#ea580c] uppercase">
                       DAY {day.day}
                     </span>
-                    <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#16324f]">
+                    <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#0f172a]">
                       {day.title}
                     </h2>
                   </div>
-                  <span className="shrink-0 rounded-xl bg-[#e7f2ef] px-3.5 py-2 text-sm font-bold text-[#187764] border border-[#cae2dc]">
+                  <span className="shrink-0 rounded-xl bg-[#ffedd5] px-3.5 py-2 text-sm font-extrabold text-[#ea580c] border border-[#fed7aa]">
                     {formatCurrency(day.dailyEstimatedCost, currency)}
                   </span>
                 </div>
@@ -284,8 +274,8 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                 {/* Explore / Activities Section */}
                 <div className="mt-6 space-y-6">
                   <div className="flex items-center gap-2">
-                    <Compass className="size-4 text-[#187764]" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <Compass className="size-4 text-[#ea580c]" />
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
                       Explore Activities
                     </h3>
                   </div>
@@ -294,13 +284,13 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                     {day.activities.map((activity, idx) => (
                       <div
                         key={`${day.day}-${activity.name}-${idx}`}
-                        className="rounded-2xl border-l-4 border-[#187764] bg-[#fbfaf8] p-4 sm:p-5 transition-colors hover:bg-slate-50 border border-slate-100"
+                        className="rounded-2xl border-l-4 border-[#ea580c] bg-[#faf8f5] p-4 sm:p-5 border border-[#eae4d9]"
                       >
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
-                          <h4 className="text-base font-bold text-[#16324f]">
+                          <h4 className="text-base font-bold text-[#0f172a]">
                             {activity.name}
                           </h4>
-                          <span className="text-sm font-bold text-[#187764]">
+                          <span className="text-sm font-extrabold text-[#ea580c]">
                             {formatCurrency(activity.estimatedCost, currency)}
                           </span>
                         </div>
@@ -327,10 +317,10 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
 
                 {/* Eat Well / Dining Section */}
                 {day.restaurants && day.restaurants.length > 0 && (
-                  <div className="mt-8 rounded-2xl border border-[#f3e4c7] bg-[#fffdf8] p-5 sm:p-6">
+                  <div className="mt-8 rounded-2xl border border-[#fef3c7] bg-[#fffbeb] p-5 sm:p-6">
                     <div className="flex items-center gap-2">
-                      <Utensils className="size-4 text-[#a85c1d]" />
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-[#a85c1d]">
+                      <Utensils className="size-4 text-[#d97706]" />
+                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#d97706]">
                         Dining & Local Flavors
                       </h3>
                     </div>
@@ -339,13 +329,13 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                       {day.restaurants.map((restaurant, idx) => (
                         <div
                           key={`${day.day}-${restaurant.name}-${idx}`}
-                          className="rounded-xl bg-white p-4 border border-[#faedd5] shadow-2xs"
+                          className="rounded-xl bg-white p-4 border border-[#fde68a] shadow-xs"
                         >
                           <div className="flex items-baseline justify-between gap-2">
-                            <h4 className="font-bold text-[#16324f] text-sm">
+                            <h4 className="font-bold text-[#0f172a] text-sm">
                               {restaurant.name}
                             </h4>
-                            <span className="shrink-0 text-xs font-bold text-[#a85c1d]">
+                            <span className="shrink-0 text-xs font-bold text-[#d97706]">
                               {formatCurrency(restaurant.estimatedCost, currency)}
                             </span>
                           </div>
@@ -367,26 +357,26 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
 
           {/* Sidebar */}
           <aside className="space-y-6">
-            <div className="rounded-3xl border border-[#cae2dc] bg-[#e7f2ef] p-6 sm:p-8 lg:sticky lg:top-24">
-              <h2 className="text-lg font-bold text-[#16324f] flex items-center gap-2">
-                <Sparkles className="size-5 text-[#187764]" />
+            <div className="rounded-3xl border border-[#ccfbf1] bg-[#f0fdf4] p-6 sm:p-8 lg:sticky lg:top-24">
+              <h2 className="text-lg font-bold text-[#0f172a] flex items-center gap-2">
+                <Sparkles className="size-5 text-[#0d9488]" />
                 Useful travel tips
               </h2>
 
               <ul className="mt-5 space-y-4">
                 {itinerary.travelTips.map((tip, idx) => (
                   <li key={idx} className="flex gap-3 text-sm leading-relaxed text-slate-700">
-                    <span className="mt-1.5 size-2 shrink-0 rounded-full bg-[#187764]" />
+                    <span className="mt-1.5 size-2 shrink-0 rounded-full bg-[#0d9488]" />
                     <span>{tip}</span>
                   </li>
                 ))}
               </ul>
 
-              <div className="mt-6 space-y-3 border-t border-[#b6dfd5] pt-5">
+              <div className="mt-6 space-y-3 border-t border-[#99f6e4] pt-5">
                 <Button
                   onClick={handleDownloadPdf}
                   disabled={isDownloading}
-                  className="w-full bg-[#16324f] hover:bg-[#234a70] text-white py-3 shadow-sm text-xs font-bold"
+                  className="w-full bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white py-3 shadow-md shadow-orange-500/20 text-xs font-extrabold rounded-xl"
                 >
                   {isDownloading ? (
                     <>
@@ -404,7 +394,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                 {canDelete && (
                   <Button
                     onClick={() => setShowDeleteModal(true)}
-                    className="w-full bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 py-3 text-xs font-bold"
+                    className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-3 text-xs font-bold rounded-xl"
                   >
                     <Trash2 className="size-4" />
                     <span>Delete Trip</span>
@@ -413,15 +403,15 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
               </div>
 
               <p className="mt-4 text-xs leading-normal text-slate-500">
-                All prices are conservative estimates. Availability, opening hours, and reservations are not guaranteed.
+                All prices are conservative estimates. Availability, opening hours, and reservations are subject to local providers.
               </p>
             </div>
           </aside>
         </div>
 
         {/* Footer Actions */}
-        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[#e4dfd6] pt-8">
-          <Button asChild size="lg" className="bg-[#187764] hover:bg-[#126653]">
+        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[#eae4d9] pt-8">
+          <Button asChild size="lg" className="bg-[#0d9488] hover:bg-[#0f766e] text-white font-bold rounded-2xl">
             <Link href="/plan">Plan another trip</Link>
           </Button>
 
@@ -430,7 +420,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
               <Button
                 onClick={() => setShowDeleteModal(true)}
                 size="lg"
-                className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
+                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-2xl"
               >
                 <Trash2 className="size-4" />
                 <span>Delete Trip</span>
@@ -440,7 +430,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
               onClick={handleDownloadPdf}
               disabled={isDownloading}
               size="lg"
-              className="bg-[#16324f] hover:bg-[#234a70]"
+              className="bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/20"
             >
               {isDownloading ? (
                 <>
@@ -510,21 +500,21 @@ function getServerSnapshot(): StoredTrip | null {
 
 function EmptyResults() {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#f7f5f1] px-6">
-      <div className="max-w-md rounded-3xl border border-[#e8e3db] bg-white p-8 text-center shadow-md">
-        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-[#e7f2ef] text-[#187764]">
-          <Compass className="size-6" />
+    <main className="grid min-h-screen place-items-center bg-[#faf8f5] px-6">
+      <div className="max-w-md rounded-3xl border border-[#eae4d9] bg-white p-8 text-center shadow-lg">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-[#ffedd5] text-[#ea580c]">
+          <Compass className="size-7" />
         </div>
-        <p className="mt-4 text-xs font-bold uppercase tracking-widest text-[#187764]">
+        <p className="mt-4 text-xs font-bold uppercase tracking-widest text-[#ea580c]">
           No itinerary found
         </p>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#16324f]">
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-[#0f172a]">
           Start planning your trip.
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-slate-600">
-          Create a personalized itinerary first, then you’ll see the full plan here.
+          Create a personalized itinerary first, then you’ll see the full travel plan here.
         </p>
-        <Button asChild size="lg" className="mt-6 bg-[#187764] hover:bg-[#126653]">
+        <Button asChild size="lg" className="mt-6 bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white font-extrabold rounded-2xl shadow-md">
           <Link href="/plan">Plan a trip</Link>
         </Button>
       </div>

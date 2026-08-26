@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 
@@ -10,8 +9,6 @@ import { Button } from "@/components/ui/button";
 import { FieldError, FieldLabel, Input } from "@/components/ui/field";
 
 export default function SignUpPage() {
-  const router = useRouter();
-
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -69,12 +66,11 @@ export default function SignUpPage() {
       });
 
       if (!signInRes || signInRes.error) {
-        router.push("/auth/signin?registered=true");
+        window.location.href = "/auth/signin?registered=true";
         return;
       }
 
-      router.push("/trips");
-      router.refresh();
+      window.location.href = "/trips";
     } catch (err) {
       console.error("Registration failed:", err);
       setError("Something went wrong while creating your account. Please try again.");
@@ -83,21 +79,25 @@ export default function SignUpPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f5f1] px-6 py-12 text-slate-800 sm:px-10 flex flex-col justify-center items-center">
-      {/* Brand Header */}
-      <Link href="/" className="mb-8 flex items-center gap-2 text-2xl font-bold text-[#16324f]">
-        <Compass className="size-8 text-[#187764]" />
-        <span>Roamly</span>
+    <main className="min-h-screen bg-[#faf8f5] px-6 py-12 text-[#0f172a] font-sans flex flex-col justify-center items-center">
+      {/* Brand Logo */}
+      <Link href="/" className="mb-8 flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#0f172a] group">
+        <span className="grid size-10 place-items-center rounded-2xl bg-gradient-to-tr from-[#ea580c] to-[#f97316] text-white shadow-md shadow-orange-500/20 transition-transform duration-300 group-hover:scale-105">
+          <Compass className="size-6" />
+        </span>
+        <span className="text-2xl font-black bg-gradient-to-r from-[#0f172a] to-[#ea580c] bg-clip-text text-transparent">
+          Roamly
+        </span>
       </Link>
 
-      <div className="w-full max-w-md rounded-3xl border border-[#e8e3db] bg-white p-6 sm:p-8 shadow-[0_18px_55px_-35px_rgba(22,50,79,0.3)]">
+      <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white">
         <div className="mb-6 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-[#16324f]">Create your account</h1>
-          <p className="mt-2 text-sm text-slate-600">Start planning and saving personalized travel itineraries.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#0f172a]">Create your account</h1>
+          <p className="mt-1.5 text-sm text-slate-600">Start planning and saving personalized travel itineraries.</p>
         </div>
 
         {error && (
-          <div role="alert" className="mb-6 rounded-2xl bg-red-50 p-4 text-xs font-semibold text-red-700 border border-red-200">
+          <div role="alert" className="mb-6 rounded-2xl bg-rose-50 p-4 text-xs font-semibold text-rose-700 border border-rose-200">
             {error}
           </div>
         )}
@@ -171,7 +171,7 @@ export default function SignUpPage() {
             type="submit"
             disabled={isSubmitting}
             size="lg"
-            className="mt-6 w-full bg-[#187764] hover:bg-[#126653] text-white shadow-xs font-bold"
+            className="mt-6 w-full bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/20"
           >
             {isSubmitting ? (
               <>
@@ -184,9 +184,9 @@ export default function SignUpPage() {
           </Button>
         </form>
 
-        <div className="mt-8 border-t border-slate-100 pt-6 text-center text-xs text-slate-600">
+        <div className="mt-8 border-t border-[#eae4d9] pt-6 text-center text-xs text-slate-600">
           Already have an account?{" "}
-          <Link href="/auth/signin" className="font-bold text-[#187764] hover:underline">
+          <Link href="/auth/signin" className="font-bold text-[#ea580c] hover:underline">
             Sign in
           </Link>
         </div>
