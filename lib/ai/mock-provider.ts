@@ -1,4 +1,4 @@
-import type { Itinerary, TripRequest } from "@/lib/trip-schema";
+import type { Activity, DailyItinerary, Itinerary, TripRequest } from "@/lib/trip-schema";
 import type { AIProvider } from "./types";
 
 export class MockProvider implements AIProvider {
@@ -55,6 +55,68 @@ export class MockProvider implements AIProvider {
         "Check local opening hours before visiting popular spots.",
         "Stay hydrated and try local specialties.",
       ],
+    };
+  }
+
+  async regenerateActivity(input: {
+    request: TripRequest;
+    dayNumber: number;
+    currentActivity: Activity;
+    instruction?: string;
+  }): Promise<Activity> {
+    const dest = input.request.destination || "Goa";
+    const opt = input.instruction ? ` (${input.instruction})` : "";
+
+    return {
+      name: `Special ${dest} Experience${opt}`,
+      description: `A customized activity in ${dest} matching your preferences: ${input.instruction || "relaxed and enjoyable"}.`,
+      location: `${dest} Highlight Zone`,
+      startTime: input.currentActivity.startTime || "10:00 AM",
+      duration: input.currentActivity.duration || "2 hours",
+      estimatedCost: Math.round(input.currentActivity.estimatedCost * 0.9) || 1200,
+    };
+  }
+
+  async regenerateDay(input: {
+    request: TripRequest;
+    dayNumber: number;
+    currentDay: DailyItinerary;
+    instruction?: string;
+  }): Promise<DailyItinerary> {
+    const dest = input.request.destination || "Goa";
+    const dayNum = input.dayNumber;
+
+    return {
+      day: dayNum,
+      title: `Day ${dayNum}: ${input.instruction ? input.instruction : `Fresh ${dest} Discovery`}`,
+      activities: [
+        {
+          name: `${dest} Morning Highlight`,
+          description: `Enjoy a refreshed morning itinerary in ${dest}.`,
+          location: `${dest} North`,
+          startTime: "09:30 AM",
+          duration: "2.5 hours",
+          estimatedCost: 1500,
+        },
+        {
+          name: `${dest} Afternoon Culture & Views`,
+          description: `Explore local sights and scenic spots in ${dest}.`,
+          location: `${dest} Promenade`,
+          startTime: "02:30 PM",
+          duration: "3 hours",
+          estimatedCost: 2000,
+        },
+      ],
+      restaurants: [
+        {
+          name: `${dest} Special Cafe`,
+          cuisine: "Local & Regional",
+          meal: "Lunch",
+          location: `${dest} Center`,
+          estimatedCost: 1200,
+        },
+      ],
+      dailyEstimatedCost: 4700,
     };
   }
 }

@@ -1,4 +1,4 @@
-import type { Itinerary, TripRequest } from "@/lib/trip-schema";
+import type { Activity, DailyItinerary, Itinerary, TripRequest } from "@/lib/trip-schema";
 
 export type TravelPlannerErrorCode =
   | "PROVIDER_NOT_CONFIGURED"
@@ -21,4 +21,16 @@ export class TravelPlannerError extends Error {
 export interface AIProvider {
   readonly name: string;
   generateItinerary(input: TripRequest): Promise<Itinerary>;
+  regenerateActivity(input: {
+    request: TripRequest;
+    dayNumber: number;
+    currentActivity: Activity;
+    instruction?: string;
+  }): Promise<Activity>;
+  regenerateDay(input: {
+    request: TripRequest;
+    dayNumber: number;
+    currentDay: DailyItinerary;
+    instruction?: string;
+  }): Promise<DailyItinerary>;
 }

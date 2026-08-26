@@ -31,9 +31,18 @@ export async function POST(request: Request) {
     itinerary = await generateItinerary(parsedInput.data);
   } catch (error) {
     if (error instanceof TravelPlannerError) {
-      const status = error.code === "PROVIDER_NOT_CONFIGURED" ? 503 : error.code === "RATE_LIMITED" ? 429 : 502;
-      return NextResponse.json({ error: error.message }, { status });
+      console.error(`[Roamly AI Service Error] Code: ${error.code} | Message: ${error.message}`);
+      const status =
+        error.code === "PROVIDER_NOT_CONFIGURED"
+          ? 503
+          : error.code === "RATE_LIMITED"
+          ? 429
+          : error.code === "TIMEOUT_ERROR"
+          ? 504
+          : 502;
+      return NextResponse.json({ error: error.message, code: error.code }, { status });
     }
+    console.error("[Roamly AI Service Unexpected Error]:", error);
     return NextResponse.json({ error: "Something went wrong while creating your itinerary. Please try again." }, { status: 500 });
   }
 

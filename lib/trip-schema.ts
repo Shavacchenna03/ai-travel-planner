@@ -13,21 +13,29 @@ export const tripRequestSchema = z.object({
   food: z.enum(foodPreferences),
 });
 
-const activitySchema = z.object({
-  name: z.string().min(1),
-  description: z.string().min(1),
-  location: z.string().min(1),
-  startTime: z.string().min(1),
-  duration: z.string().min(1),
-  estimatedCost: z.number().nonnegative(),
+export const activitySchema = z.object({
+  name: z.string().min(1, "Activity name is required."),
+  description: z.string().min(1, "Description is required."),
+  location: z.string().min(1, "Location is required."),
+  startTime: z.string().min(1, "Start time is required."),
+  duration: z.string().min(1, "Duration is required."),
+  estimatedCost: z.coerce.number().nonnegative("Estimated cost must be 0 or greater."),
 });
 
-const restaurantSchema = z.object({
+export const restaurantSchema = z.object({
   name: z.string().min(1),
   cuisine: z.string().min(1),
   meal: z.string().min(1),
   location: z.string().min(1),
   estimatedCost: z.number().nonnegative(),
+});
+
+export const dailyItinerarySchema = z.object({
+  day: z.number().int().min(1),
+  title: z.string().min(1),
+  activities: z.array(activitySchema),
+  restaurants: z.array(restaurantSchema),
+  dailyEstimatedCost: z.number().nonnegative(),
 });
 
 export const itinerarySchema = z.object({
@@ -36,15 +44,12 @@ export const itinerarySchema = z.object({
   summary: z.string().min(1),
   estimatedTotalCost: z.number().nonnegative(),
   currency: z.enum(currencies),
-  dailyItinerary: z.array(z.object({
-    day: z.number().int().min(1),
-    title: z.string().min(1),
-    activities: z.array(activitySchema),
-    restaurants: z.array(restaurantSchema),
-    dailyEstimatedCost: z.number().nonnegative(),
-  })),
+  dailyItinerary: z.array(dailyItinerarySchema),
   travelTips: z.array(z.string().min(1)),
 });
 
 export type TripRequest = z.infer<typeof tripRequestSchema>;
+export type Activity = z.infer<typeof activitySchema>;
+export type Restaurant = z.infer<typeof restaurantSchema>;
+export type DailyItinerary = z.infer<typeof dailyItinerarySchema>;
 export type Itinerary = z.infer<typeof itinerarySchema>;
