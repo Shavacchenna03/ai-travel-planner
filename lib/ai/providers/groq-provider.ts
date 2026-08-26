@@ -3,10 +3,10 @@ import { MockProvider } from "../mock-provider";
 import {
   buildRegenerateActivityUserPrompt,
   buildRegenerateDayUserPrompt,
+  buildTravelPlannerSystemPrompt,
   buildUserPrompt,
   regenerateActivitySystemPrompt,
   regenerateDaySystemPrompt,
-  travelPlannerSystemPrompt,
 } from "../prompts";
 import { TravelPlannerError, type AIProvider } from "../types";
 
@@ -27,7 +27,7 @@ export class GroqProvider implements AIProvider {
       model,
       messages,
       response_format: { type: "json_object" },
-      temperature: 0.3,
+      temperature: 0.2,
     };
 
     const controller = new AbortController();
@@ -110,48 +110,90 @@ export class GroqProvider implements AIProvider {
     return { content, modelUsed: model };
   }
 
+  private parseAndValidateItinerary(content: string, input: TripRequest, modelUsed: string): Itinerary {
+    let parsedRaw: unknown;
+    try {
+      parsedRaw = JSON.parse(content);
+      console.log(`[Roamly Groq Debug] Model: ${modelUsed} | Raw JSON parse: SUCCESS`);
+    } catch (parseErr) {
+      console.error(`[Roamly Groq Debug] Model: ${modelUsed} | Raw JSON parse: FAILED`, parseErr);
+      throw new TravelPlannerError("INVALID_AI_RESPONSE", "Failed to parse JSON response from Groq.");
+    }
+
+    const normalized = normalizeItineraryJSON(parsedRaw, input);
+    const validation = itinerarySchema.safeParse(normalized);
+
+    if (!validation.success) {
+      console.error(
+        `[Roamly Groq Debug] Model: ${modelUsed} | Schema Validation: FAILED`,
+        JSON.stringify(validation.error.flatten().fieldErrors, null, 2)
+      );
+      throw new TravelPlannerError("INVALID_AI_RESPONSE", "Groq returned an invalid itinerary structure.");
+    }
+
+    return validation.data;
+  }
+
   async generateItinerary(input: TripRequest): Promise<Itinerary> {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey && (process.env.ALLOW_MOCK_FALLBACK === "true" || process.env.USE_MOCK_ITINERARY === "true")) {
       return new MockProvider().generateItinerary(input);
     }
 
+    console.log(`[Roamly Groq Debug] Requested duration: ${input.duration} days | Destination: ${input.destination}`);
+
+    const systemPrompt = buildTravelPlannerSystemPrompt(input.duration);
+    const userPrompt = buildUserPrompt(input);
+
     try {
-      const { content, modelUsed } = await this.callGroqAPI([
-        { role: "system", content: travelPlannerSystemPrompt },
-        { role: "user", content: buildUserPrompt(input) },
+      const initialCall = await this.callGroqAPI([
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ]);
 
-      let parsedRaw: unknown;
-      try {
-        parsedRaw = JSON.parse(content);
-        console.log(`[Roamly Groq Debug] Model: ${modelUsed} | Raw JSON parse: SUCCESS`);
-      } catch (parseErr) {
-        console.error(`[Roamly Groq Debug] Model: ${modelUsed} | Raw JSON parse: FAILED`, parseErr);
-        throw new TravelPlannerError("INVALID_AI_RESPONSE", "Failed to parse JSON response from Groq.");
-      }
+      const validated = this.parseAndValidateItinerary(initialCall.content, input, initialCall.modelUsed);
 
-      const normalized = normalizeItineraryJSON(parsedRaw, input);
-      const validation = itinerarySchema.safeParse(normalized);
-
-      if (!validation.success) {
-        console.error(
-          `[Roamly Groq Debug] Model: ${modelUsed} | Schema Validation: FAILED`,
-          JSON.stringify(validation.error.flatten().fieldErrors, null, 2)
+      // Check duration & currency match
+      if (validated.currency === input.currency && validated.dailyItinerary.length === input.duration) {
+        console.log(
+          `[Roamly Groq Debug] Model: ${initialCall.modelUsed} | Duration & Currency Match: SUCCESS (${validated.dailyItinerary.length}/${input.duration} days)`
         );
-        throw new TravelPlannerError("INVALID_AI_RESPONSE", "Groq returned an invalid itinerary structure.");
+        return validated;
       }
 
-      console.log(`[Roamly Groq Debug] Model: ${modelUsed} | Schema Validation: SUCCESS (Destination: ${validation.data.destination})`);
+      console.error(
+        `[Roamly Groq Debug] Duration/Currency mismatch - Currency (expected: ${input.currency}, got: ${validated.currency}), Duration (expected: ${input.duration}, got: ${validated.dailyItinerary.length}). Pausing 1.5s then triggering 1 retry...`
+      );
 
-      if (validation.data.currency !== input.currency || validation.data.dailyItinerary.length !== input.duration) {
+      // Short pause before retry to ensure TPM rate limits reset
+      await new Promise((res) => setTimeout(res, 1500));
+
+      const dayListStr = Array.from({ length: input.duration }, (_, i) => `Day ${i + 1}`).join(", ");
+
+      // Controlled 1-time retry for duration/currency mismatch
+      const retryCall = await this.callGroqAPI([
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+        { role: "assistant", content: initialCall.content },
+        {
+          role: "user",
+          content: `CRITICAL DURATION CORRECTION: Your previous JSON response contained only ${validated.dailyItinerary.length} days. You MUST return a JSON object where dailyItinerary contains EXACTLY ${input.duration} daily itinerary items (${dayListStr}). Generate Day 1 to Day ${input.duration} completely.`,
+        },
+      ]);
+
+      const retryValidated = this.parseAndValidateItinerary(retryCall.content, input, retryCall.modelUsed);
+
+      if (retryValidated.currency !== input.currency || retryValidated.dailyItinerary.length !== input.duration) {
         console.error(
-          `[Roamly Groq Debug] Response mismatch - Currency (expected: ${input.currency}, got: ${validation.data.currency}), Duration (expected: ${input.duration}, got: ${validation.data.dailyItinerary.length})`
+          `[Roamly Groq Debug] Retry mismatch - Currency (expected: ${input.currency}, got: ${retryValidated.currency}), Duration (expected: ${input.duration}, got: ${retryValidated.dailyItinerary.length})`
         );
         throw new TravelPlannerError("INVALID_AI_RESPONSE", "Groq returned an itinerary with mismatched duration or currency.");
       }
 
-      return validation.data;
+      console.log(
+        `[Roamly Groq Debug] Model: ${retryCall.modelUsed} | Retry Duration Match: SUCCESS (${retryValidated.dailyItinerary.length}/${input.duration} days)`
+      );
+      return retryValidated;
     } catch (err) {
       if (process.env.ALLOW_MOCK_FALLBACK === "true" || process.env.USE_MOCK_ITINERARY === "true") {
         console.warn("[Roamly AI Warning] Falling back to MockProvider for generateItinerary:", err);

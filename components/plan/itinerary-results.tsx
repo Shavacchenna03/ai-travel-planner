@@ -2,14 +2,40 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore, type DragEvent } from "react";
 
 import { ActivityEditorModal } from "@/components/plan/activity-editor-modal";
 import { AIRegenerateModal } from "@/components/plan/ai-regenerate-modal";
+import { BudgetBreakdownCard } from "@/components/plan/budget-breakdown-card";
+import { MoveActivityModal } from "@/components/plan/move-activity-modal";
 import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Compass, Download, Loader, MapPin, Plus, Sparkles, Tag, Trash2, Users, Utensils } from "@/components/icons";
+import {
+  ArrowUpDown,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Compass,
+  Download,
+  GripVertical,
+  Loader,
+  MapPin,
+  Plus,
+  Sparkles,
+  Tag,
+  Trash2,
+  Users,
+  Utensils,
+} from "@/components/icons";
 import { NavigationHeader } from "@/components/navigation-header";
 import { formatCurrency } from "@/lib/formatters";
+import {
+  moveActivityBetweenDays,
+  moveActivityDown,
+  moveActivityUp,
+  recalculateItineraryCosts,
+  reorderActivityInDay,
+} from "@/lib/itinerary-utils";
 import type { Activity, DailyItinerary, Itinerary, TripRequest } from "@/lib/trip-schema";
 
 type StoredTrip = { tripId?: string; itinerary: Itinerary; request: TripRequest; createdAt?: string | Date };
@@ -45,6 +71,14 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
     initialActivity?: Activity | null;
   }>({ isOpen: false, dayNumber: 1 });
 
+  // Move activity modal state
+  const [moveModalState, setMoveModalState] = useState<{
+    isOpen: boolean;
+    dayNumber: number;
+    activityIndex: number;
+    activity: Activity;
+  } | null>(null);
+
   // AI Regenerate modal state
   const [aiModalState, setAiModalState] = useState<{
     isOpen: boolean;
@@ -56,6 +90,10 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
     currentDay?: DailyItinerary;
   }>({ isOpen: false, target: "activity", dayNumber: 1, targetTitle: "" });
 
+  // Drag and Drop state
+  const [draggedItem, setDraggedItem] = useState<{ dayNumber: number; activityIndex: number } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ dayNumber: number; activityIndex: number } | null>(null);
+
   if (!trip || (!trip.itinerary && !activeItinerary)) return <EmptyResults />;
 
   const itinerary: Itinerary = activeItinerary || trip.itinerary;
@@ -63,29 +101,10 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
   const currency = itinerary.currency || request.currency || "INR";
   const canDelete = showDelete || Boolean(tripId);
 
-  // Re-calculate daily and total costs accurately
-  function recalculateItineraryCosts(currentItinerary: Itinerary): Itinerary {
-    const updatedDays = currentItinerary.dailyItinerary.map((day) => {
-      const activitiesTotal = day.activities.reduce((sum, act) => sum + (act.estimatedCost || 0), 0);
-      const restaurantsTotal = (day.restaurants || []).reduce((sum, rest) => sum + (rest.estimatedCost || 0), 0);
-      return {
-        ...day,
-        dailyEstimatedCost: activitiesTotal + restaurantsTotal,
-      };
-    });
-
-    const totalCost = updatedDays.reduce((sum, day) => sum + day.dailyEstimatedCost, 0);
-
-    return {
-      ...currentItinerary,
-      dailyItinerary: updatedDays,
-      estimatedTotalCost: totalCost,
-    };
-  }
-
   // Persist updated itinerary to React state, sessionStorage, and PostgreSQL DB if saved
   async function saveUpdatedItinerary(nextItinerary: Itinerary, feedbackMsg = "Changes saved") {
     const recalculated = recalculateItineraryCosts(nextItinerary);
+    const previousItinerary = itinerary;
     setActiveItinerary(recalculated);
     setIsSaving(true);
 
@@ -117,12 +136,112 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
         }
       } catch (err) {
         console.error("Failed to persist itinerary update to DB:", err);
+        // Revert state if DB save failed
+        setActiveItinerary(previousItinerary);
+        setToastMessage("❌ Failed to save changes. Please try again.");
+        setIsSaving(false);
+        setTimeout(() => setToastMessage(""), 4000);
+        return;
       }
     }
 
     setIsSaving(false);
     setToastMessage(`✓ ${feedbackMsg}`);
     setTimeout(() => setToastMessage(""), 3500);
+  }
+
+  // --- Handlers for Drag and Drop --- //
+
+  function handleDragStart(e: DragEvent<HTMLDivElement>, dayNumber: number, activityIndex: number) {
+    setDraggedItem({ dayNumber, activityIndex });
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", JSON.stringify({ dayNumber, activityIndex }));
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>, dayNumber: number, activityIndex: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dropTarget?.dayNumber !== dayNumber || dropTarget?.activityIndex !== activityIndex) {
+      setDropTarget({ dayNumber, activityIndex });
+    }
+  }
+
+  function handleDragLeave(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>, targetDayNumber: number, targetActivityIndex: number) {
+    e.preventDefault();
+    setDropTarget(null);
+
+    if (!draggedItem) return;
+
+    const { dayNumber: sourceDay, activityIndex: sourceIndex } = draggedItem;
+    setDraggedItem(null);
+
+    if (sourceDay === targetDayNumber && sourceIndex === targetActivityIndex) {
+      return; // No-op
+    }
+
+    if (sourceDay === targetDayNumber) {
+      // Reorder within same day
+      const nextItinerary = reorderActivityInDay(itinerary, sourceDay, sourceIndex, targetActivityIndex);
+      saveUpdatedItinerary(nextItinerary, `Activity reordered on Day ${sourceDay}`);
+    } else {
+      // Move between days
+      const nextItinerary = moveActivityBetweenDays(
+        itinerary,
+        sourceDay,
+        sourceIndex,
+        targetDayNumber,
+        targetActivityIndex
+      );
+      saveUpdatedItinerary(nextItinerary, `Activity moved from Day ${sourceDay} to Day ${targetDayNumber}`);
+    }
+  }
+
+  function handleDropOnEmptyDay(e: DragEvent<HTMLDivElement>, targetDayNumber: number) {
+    e.preventDefault();
+    setDropTarget(null);
+
+    if (!draggedItem) return;
+
+    const { dayNumber: sourceDay, activityIndex: sourceIndex } = draggedItem;
+    setDraggedItem(null);
+
+    const nextItinerary = moveActivityBetweenDays(itinerary, sourceDay, sourceIndex, targetDayNumber, 0);
+    saveUpdatedItinerary(nextItinerary, `Activity moved to Day ${targetDayNumber}`);
+  }
+
+  // --- Handlers for Move Up / Move Down / Move Modal --- //
+
+  function handleMoveUp(dayNumber: number, activityIndex: number) {
+    const nextItinerary = moveActivityUp(itinerary, dayNumber, activityIndex);
+    saveUpdatedItinerary(nextItinerary, "Activity moved up");
+  }
+
+  function handleMoveDown(dayNumber: number, activityIndex: number) {
+    const nextItinerary = moveActivityDown(itinerary, dayNumber, activityIndex);
+    saveUpdatedItinerary(nextItinerary, "Activity moved down");
+  }
+
+  function handleConfirmMoveModal(targetDayNumber: number, targetPosition: "beginning" | "end") {
+    if (!moveModalState) return;
+    const { dayNumber: sourceDay, activityIndex: sourceIndex } = moveModalState;
+
+    const targetDayObj = itinerary.dailyItinerary.find((d) => d.day === targetDayNumber);
+    const targetIndex = targetPosition === "beginning" ? 0 : targetDayObj ? targetDayObj.activities.length : 0;
+
+    const nextItinerary = moveActivityBetweenDays(
+      itinerary,
+      sourceDay,
+      sourceIndex,
+      targetDayNumber,
+      targetIndex
+    );
+
+    saveUpdatedItinerary(nextItinerary, `Activity moved to Day ${targetDayNumber}`);
+    setMoveModalState(null);
   }
 
   // --- Handlers for Activity Operations --- //
@@ -344,6 +463,18 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
         currency={currency}
       />
 
+      {/* Move Activity Modal */}
+      {moveModalState && (
+        <MoveActivityModal
+          isOpen={Boolean(moveModalState)}
+          onClose={() => setMoveModalState(null)}
+          onConfirm={handleConfirmMoveModal}
+          activity={moveModalState.activity}
+          currentDayNumber={moveModalState.dayNumber}
+          dailyItinerary={itinerary.dailyItinerary}
+        />
+      )}
+
       {/* AI Partial Regeneration Modal */}
       <AIRegenerateModal
         isOpen={aiModalState.isOpen}
@@ -459,7 +590,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
               <Sparkles className="size-3.5" />
               {trip.createdAt
                 ? `Saved Trip · ${new Date(trip.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                : "Your Editable Itinerary"}
+                : "Your Interactive Itinerary Workspace"}
             </span>
             {isSaving && (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
@@ -494,17 +625,15 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                 )}
               </div>
             </div>
+          </div>
 
-            {/* Estimated Total Cost Card */}
-            <div className="w-full md:w-auto shrink-0 rounded-2xl bg-gradient-to-br from-[#ea580c] via-[#f97316] to-[#d97706] p-6 text-white shadow-lg shadow-orange-500/20">
-              <p className="text-xs font-extrabold uppercase tracking-wider text-orange-100">
-                Estimated Total Cost
-              </p>
-              <p className="mt-1 text-3xl font-black tracking-tight text-white">
-                {formatCurrency(itinerary.estimatedTotalCost, currency)}
-              </p>
-              <p className="mt-1 text-xs text-orange-100">For all {request.travelers} traveler(s)</p>
-            </div>
+          {/* Dynamic Budget Breakdown Component */}
+          <div className="mt-6">
+            <BudgetBreakdownCard
+              itinerary={itinerary}
+              currency={currency}
+              travelers={request.travelers || 1}
+            />
           </div>
 
           {/* Trip Summary */}
@@ -558,7 +687,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                   </div>
                 </div>
 
-                {/* Explore / Activities Section */}
+                {/* Explore / Activities Section with Drag & Drop Dropzone */}
                 <div className="mt-6 space-y-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -570,8 +699,14 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                   </div>
 
                   {day.activities.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-[#eae4d9] bg-[#faf8f5] p-6 text-center">
-                      <p className="text-xs font-semibold text-slate-500">No activities planned for this day.</p>
+                    <div
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => handleDropOnEmptyDay(e, day.day)}
+                      className="rounded-2xl border-2 border-dashed border-[#eae4d9] bg-[#faf8f5] p-8 text-center transition-colors hover:border-[#ea580c] hover:bg-[#fff7ed]"
+                    >
+                      <p className="text-xs font-bold text-slate-500">
+                        No activities planned for this day. Drag an activity here or add one below.
+                      </p>
                       <Button
                         onClick={() => handleOpenAddActivity(day.day)}
                         size="sm"
@@ -582,70 +717,131 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                       </Button>
                     </div>
                   ) : (
-                    <div className="space-y-5">
-                      {day.activities.map((activity, idx) => (
-                        <div
-                          key={`${day.day}-${activity.name}-${idx}`}
-                          className="group relative rounded-2xl border-l-4 border-[#ea580c] bg-[#faf8f5] p-4 sm:p-5 border border-[#eae4d9] transition-all hover:bg-white hover:shadow-md"
-                        >
-                          {/* Card Header & Controls */}
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <h4 className="text-base font-bold text-[#0f172a]">
-                              {activity.name}
-                            </h4>
-                            
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-sm font-extrabold text-[#ea580c] mr-2">
-                                {formatCurrency(activity.estimatedCost, currency)}
-                              </span>
+                    <div className="space-y-4">
+                      {day.activities.map((activity, idx) => {
+                        const isDropTarget = dropTarget?.dayNumber === day.day && dropTarget?.activityIndex === idx;
+                        const isBeingDragged = draggedItem?.dayNumber === day.day && draggedItem?.activityIndex === idx;
 
-                              {/* Activity Actions: Edit, Regenerate, Delete */}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditActivity(day.day, idx, activity)}
-                                title="Edit Activity"
-                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors text-xs font-bold"
-                              >
-                                Edit
-                              </button>
-                              
-                              <button
-                                type="button"
-                                onClick={() => handleOpenRegenerateActivity(day.day, idx, activity)}
-                                title="Regenerate with AI"
-                                className="rounded-lg p-1.5 text-[#ea580c] hover:bg-[#ffedd5] transition-colors"
-                              >
-                                <Sparkles className="size-3.5" />
-                              </button>
+                        return (
+                          <div
+                            key={`${day.day}-${activity.name}-${idx}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, day.day, idx)}
+                            onDragOver={(e) => handleDragOver(e, day.day, idx)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, day.day, idx)}
+                            className={`group relative rounded-2xl border-l-4 border-[#ea580c] bg-[#faf8f5] p-4 sm:p-5 border border-[#eae4d9] transition-all duration-200 ${
+                              isBeingDragged ? "opacity-40 border-dashed scale-98" : "hover:bg-white hover:shadow-md"
+                            } ${isDropTarget ? "border-t-4 border-t-[#ea580c] ring-2 ring-[#ffedd5] bg-[#fff7ed]" : ""}`}
+                          >
+                            {/* Card Header & Drag Handle + Controls */}
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-1">
+                                {/* Drag Handle */}
+                                <div
+                                  className="cursor-grab active:cursor-grabbing p-1 rounded-lg text-slate-400 hover:text-[#ea580c] hover:bg-slate-200 transition-colors"
+                                  title="Drag to reorder or move to another day"
+                                >
+                                  <GripVertical className="size-4" />
+                                </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteActivity(day.day, idx)}
-                                title="Delete Activity"
-                                className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-100 transition-colors"
-                              >
-                                <Trash2 className="size-3.5" />
-                              </button>
+                                <h4 className="text-base font-bold text-[#0f172a]">{activity.name}</h4>
+                              </div>
+
+                              {/* Controls toolbar */}
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span className="text-sm font-extrabold text-[#ea580c] mr-2">
+                                  {formatCurrency(activity.estimatedCost, currency)}
+                                </span>
+
+                                {/* Move Up / Move Down Touch buttons */}
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
+                                  onClick={() => handleMoveUp(day.day, idx)}
+                                  title="Move Up"
+                                  className="rounded-lg p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                >
+                                  <ChevronUp className="size-3.5" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={idx === day.activities.length - 1}
+                                  onClick={() => handleMoveDown(day.day, idx)}
+                                  title="Move Down"
+                                  className="rounded-lg p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                >
+                                  <ChevronDown className="size-3.5" />
+                                </button>
+
+                                {/* Move to Day Modal Button */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setMoveModalState({
+                                      isOpen: true,
+                                      dayNumber: day.day,
+                                      activityIndex: idx,
+                                      activity,
+                                    })
+                                  }
+                                  title="Move to another Day..."
+                                  className="rounded-lg p-1 text-[#0d9488] hover:bg-teal-50 transition-colors"
+                                >
+                                  <ArrowUpDown className="size-3.5" />
+                                </button>
+
+                                {/* Edit Activity */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditActivity(day.day, idx, activity)}
+                                  title="Edit Activity"
+                                  className="rounded-lg px-2 py-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors text-xs font-bold"
+                                >
+                                  Edit
+                                </button>
+
+                                {/* AI Regenerate Activity */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenRegenerateActivity(day.day, idx, activity)}
+                                  title="Regenerate with AI"
+                                  className="rounded-lg p-1.5 text-[#ea580c] hover:bg-[#ffedd5] transition-colors"
+                                >
+                                  <Sparkles className="size-3.5" />
+                                </button>
+
+                                {/* Delete Activity */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteActivity(day.day, idx)}
+                                  title="Delete Activity"
+                                  className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-100 transition-colors"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
 
-                          {/* Meta Info */}
-                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-500">
-                            <span className="inline-flex items-center gap-1">
-                              <Clock className="size-3.5 text-slate-400" />
-                              {activity.startTime} ({activity.duration})
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              <MapPin className="size-3.5 text-slate-400" />
-                              {activity.location}
-                            </span>
-                          </div>
+                            {/* Meta Info */}
+                            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-500 pl-6">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="size-3.5 text-slate-400" />
+                                {activity.startTime} ({activity.duration})
+                              </span>
+                              <span className="inline-flex items-center gap-1">
+                                <MapPin className="size-3.5 text-slate-400" />
+                                {activity.location}
+                              </span>
+                            </div>
 
-                          <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                            {activity.description}
-                          </p>
-                        </div>
-                      ))}
+                            <p className="mt-3 text-sm leading-relaxed text-slate-600 pl-6">
+                              {activity.description}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

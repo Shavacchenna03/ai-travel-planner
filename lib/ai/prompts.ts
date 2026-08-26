@@ -1,6 +1,9 @@
 import type { Activity, DailyItinerary, TripRequest } from "@/lib/trip-schema";
 
-export const travelPlannerSystemPrompt = `You are Roamly's experienced travel planner. Create a practical, enjoyable day-by-day itinerary using ONLY the following JSON structure:
+export function buildTravelPlannerSystemPrompt(duration: number): string {
+  const dayListStr = Array.from({ length: duration }, (_, i) => `Day ${i + 1}`).join(", ");
+
+  return `You are Roamly's experienced travel planner. Create a practical, enjoyable day-by-day itinerary using ONLY the following JSON structure:
 
 {
   "destination": "string",
@@ -33,25 +36,47 @@ export const travelPlannerSystemPrompt = `You are Roamly's experienced travel pl
       ],
       "dailyEstimatedCost": number
     }
+    /* Generate EXACTLY ${duration} day objects (${dayListStr}) */
   ],
   "travelTips": [
     "string"
   ]
 }
 
+CRITICAL DURATION REQUIREMENT:
+- The user requested a trip duration of EXACTLY ${duration} day(s) (${dayListStr}).
+- You MUST generate EXACTLY ${duration} day objects inside the "dailyItinerary" array.
+- "dailyItinerary.length" MUST equal ${duration}.
+- Do NOT stop at 2, 3, 5, or 6 days. You MUST include all days up to Day ${duration}.
+- Ensure the days are numbered sequentially from day: 1 up to day: ${duration} (${dayListStr}).
+- The trip plan is INVALID if dailyItinerary.length !== ${duration}.
+
 Rules:
-- Respect the destination, total trip budget for the entire group, selected currency (must be one of INR, USD, EUR, GBP, JPY), duration, travelers, travel style, accommodation preference, and food preference.
-- Treat all costs as conservative estimates for the whole group unless a field explicitly says otherwise. Keep estimatedTotalCost plausibly at or below the user's total budget.
-- Create exactly one dailyItinerary entry per requested day (day: 1..N). Keep each day achievable: usually 2–4 nearby activities with time for travel, meals, and rest. Avoid inventing real-time availability, confirmed prices, opening hours, or guaranteed access.
+- Respect the destination, total trip budget for the entire group, selected currency (must be one of INR, USD, EUR, GBP, JPY), duration (${duration} days), travelers, travel style, accommodation preference, and food preference.
+- Treat all costs as conservative estimates for the whole group. Keep estimatedTotalCost plausibly at or below the user's total budget.
+- Ensure each day (from Day 1 to Day ${duration}) is achievable: usually 2–4 nearby activities with time for travel, meals, and rest.
 - Ensure dailyEstimatedCost is the sum of activity and restaurant estimated costs for that day.
-- Ensure travelTips is an array of helpful travel advice strings, NOT a single paragraph or string.
+- Ensure travelTips is an array of helpful travel advice strings.
 - Output MUST be strict valid JSON matching the specified schema. Do not output Markdown, HTML, commentary, or wrapper objects outside the specified JSON schema.`;
+}
+
+export const travelPlannerSystemPrompt = buildTravelPlannerSystemPrompt(3);
 
 export function buildUserPrompt(input: TripRequest): string {
-  return `Plan this trip: ${JSON.stringify({
-    ...input,
-    budgetScope: "This is the total budget for the entire group, not per traveler or per day.",
-  })}`;
+  const dayListStr = Array.from({ length: input.duration }, (_, i) => `Day ${i + 1}`).join(", ");
+
+  return `Plan a trip with the following parameters:
+- Destination: ${input.destination}
+- Duration: EXACTLY ${input.duration} DAYS (${dayListStr})
+- Group Budget: ${input.currency} ${input.budget} (Total for all ${input.travelers} travelers)
+- Currency: ${input.currency}
+- Travelers: ${input.travelers}
+- Travel Style: ${input.style}
+- Accommodation Preference: ${input.accommodation}
+- Food Preference: ${input.food}
+
+CRITICAL STRUCTURAL CHECK:
+"dailyItinerary" array MUST contain EXACTLY ${input.duration} elements: ${dayListStr}.`;
 }
 
 export const regenerateActivitySystemPrompt = `You are Roamly's experienced travel planner. Your task is to generate ONE single replacement activity for a trip.
