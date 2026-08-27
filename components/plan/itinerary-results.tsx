@@ -7,7 +7,9 @@ import { useState, useSyncExternalStore, type DragEvent } from "react";
 import { ActivityEditorModal } from "@/components/plan/activity-editor-modal";
 import { AIRegenerateModal } from "@/components/plan/ai-regenerate-modal";
 import { BudgetBreakdownCard } from "@/components/plan/budget-breakdown-card";
+import { DailyCarryChecklist } from "@/components/plan/daily-carry-checklist";
 import { MoveActivityModal } from "@/components/plan/move-activity-modal";
+import { NearbyPlaces } from "@/components/plan/nearby-places";
 import { TripWeatherOutlook } from "@/components/plan/trip-weather-outlook";
 import { WeatherIcon } from "@/components/weather-icon";
 import { Button } from "@/components/ui/button";
@@ -806,6 +808,12 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                       )}
                     </div>
                   </div>
+
+                  {/* Daily Carry Checklist Component */}
+                  <DailyCarryChecklist day={day} weather={day.weather} />
+
+                  {/* Nearby Popular Places Component */}
+                  <NearbyPlaces places={day.nearbyPlaces} />
 
                   {/* Explore / Activities Section with Drag & Drop Dropzone */}
                   <div className="mt-6 space-y-6">

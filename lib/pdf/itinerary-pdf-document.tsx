@@ -1,7 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import type { Itinerary, TripRequest } from "@/lib/trip-schema";
 import { formatCurrency } from "@/lib/formatters";
-import { getTripWeatherSummary } from "@/lib/weather";
+import { getDailyCarryChecklist, getTripWeatherSummary } from "@/lib/weather";
 
 // Define PDF styles
 const styles = StyleSheet.create({
@@ -180,6 +180,50 @@ const styles = StyleSheet.create({
   },
   dayContent: {
     padding: 12,
+  },
+  carryBox: {
+    backgroundColor: "#fffdf0",
+    borderRadius: 6,
+    padding: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#fef08a",
+    borderStyle: "solid",
+  },
+  carryCategoryLabel: {
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    color: "#b45309",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  carryText: {
+    fontSize: 8.5,
+    color: "#451a03",
+    lineHeight: 1.3,
+  },
+  nearbyPdfBox: {
+    backgroundColor: "#f0fdf4",
+    borderRadius: 6,
+    padding: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    borderStyle: "solid",
+  },
+  nearbyPdfCategoryLabel: {
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    color: "#166534",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  nearbyPdfText: {
+    fontSize: 8.5,
+    color: "#14532d",
+    lineHeight: 1.3,
   },
   categoryLabel: {
     fontSize: 9,
@@ -380,69 +424,93 @@ export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumen
         {/* Day-by-Day Itinerary */}
         <Text style={styles.sectionHeading}>Day-by-Day Itinerary</Text>
 
-        {itinerary.dailyItinerary.map((day) => (
-          <View key={day.day} style={styles.dayCard} wrap={false}>
-            {/* Day Header */}
-            <View style={styles.dayHeader}>
-              <View style={styles.dayTitleLeft}>
-                <Text style={styles.dayNumberBadge}>DAY {day.day}:</Text>
-                <Text style={styles.dayTitle}>{day.title}</Text>
-              </View>
-              <Text style={styles.dayCost}>{formatCurrency(day.dailyEstimatedCost, currency)}</Text>
-            </View>
+        {itinerary.dailyItinerary.map((day) => {
+          const checklist = getDailyCarryChecklist(day, day.weather);
 
-            {/* Weather Subtext */}
-            {day.weather && (
-              <Text style={styles.weatherSubtext}>
-                Weather: {day.weather.condition} ({day.weather.temperatureMin ?? 'N/A'}°C to {day.weather.temperatureMax ?? 'N/A'}°C
-                {day.weather.precipitationProbability != null && day.weather.precipitationProbability > 0
-                  ? ` · ${day.weather.precipitationProbability}% rain`
-                  : ""}) · {day.weather.mode === "forecast" ? "Forecast" : "Typical Conditions"}
-              </Text>
-            )}
-
-            <View style={styles.dayContent}>
-              {/* Activities */}
-              {day.activities && day.activities.length > 0 && (
-                <View>
-                  <Text style={styles.categoryLabel}>Explore Activities</Text>
-                  {day.activities.map((activity, idx) => (
-                    <View key={idx} style={styles.activityItem}>
-                      <View style={styles.activityHeaderRow}>
-                        <Text style={styles.activityName}>{activity.name}</Text>
-                        <Text style={styles.activityCost}>{formatCurrency(activity.estimatedCost, currency)}</Text>
-                      </View>
-                      <Text style={styles.activityMeta}>
-                        {activity.startTime} · {activity.duration} · {activity.location}
-                      </Text>
-                      <Text style={styles.activityDesc}>{activity.description}</Text>
-                    </View>
-                  ))}
+          return (
+            <View key={day.day} style={styles.dayCard} wrap={false}>
+              {/* Day Header */}
+              <View style={styles.dayHeader}>
+                <View style={styles.dayTitleLeft}>
+                  <Text style={styles.dayNumberBadge}>DAY {day.day}:</Text>
+                  <Text style={styles.dayTitle}>{day.title}</Text>
                 </View>
+                <Text style={styles.dayCost}>{formatCurrency(day.dailyEstimatedCost, currency)}</Text>
+              </View>
+
+              {/* Weather Subtext */}
+              {day.weather && (
+                <Text style={styles.weatherSubtext}>
+                  Weather: {day.weather.condition} ({day.weather.temperatureMin ?? 'N/A'}°C to {day.weather.temperatureMax ?? 'N/A'}°C
+                  {day.weather.precipitationProbability != null && day.weather.precipitationProbability > 0
+                    ? ` · ${day.weather.precipitationProbability}% rain`
+                    : ""}) · {day.weather.mode === "forecast" ? "Forecast" : "Typical Conditions"}
+                </Text>
               )}
 
-              {/* Restaurants */}
-              {day.restaurants && day.restaurants.length > 0 && (
-                <View style={styles.restaurantBox}>
-                  <Text style={styles.restaurantCategoryLabel}>Dining & Local Flavors</Text>
-                  {day.restaurants.map((restaurant, idx) => (
-                    <View key={idx} style={styles.restaurantItem}>
-                      <View style={styles.activityHeaderRow}>
-                        <Text style={styles.restaurantName}>{restaurant.name}</Text>
-                        <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", color: "#b45309" }}>
-                          {formatCurrency(restaurant.estimatedCost, currency)}
+              <View style={styles.dayContent}>
+                {/* Carry Checklist PDF Box */}
+                {checklist && checklist.length > 0 && (
+                  <View style={styles.carryBox}>
+                    <Text style={styles.carryCategoryLabel}>WHAT TO CARRY TODAY</Text>
+                    <Text style={styles.carryText}>
+                      {checklist.map((item) => `• ${item.label}`).join("   ")}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Nearby Places PDF Box */}
+                {day.nearbyPlaces && day.nearbyPlaces.length > 0 && (
+                  <View style={styles.nearbyPdfBox}>
+                    <Text style={styles.nearbyPdfCategoryLabel}>NEARBY PLACES</Text>
+                    <Text style={styles.nearbyPdfText}>
+                      {day.nearbyPlaces.map((p) => `• ${p.name} (${p.distanceKm} km away)`).join("   ")}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Activities */}
+                {day.activities && day.activities.length > 0 && (
+                  <View>
+                    <Text style={styles.categoryLabel}>Explore Activities</Text>
+                    {day.activities.map((activity, idx) => (
+                      <View key={idx} style={styles.activityItem}>
+                        <View style={styles.activityHeaderRow}>
+                          <Text style={styles.activityName}>{activity.name}</Text>
+                          <Text style={styles.activityCost}>{formatCurrency(activity.estimatedCost, currency)}</Text>
+                        </View>
+                        <Text style={styles.activityMeta}>
+                          {activity.startTime} · {activity.duration} · {activity.location}
+                        </Text>
+                        <Text style={styles.activityDesc}>{activity.description}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Restaurants */}
+                {day.restaurants && day.restaurants.length > 0 && (
+                  <View style={styles.restaurantBox}>
+                    <Text style={styles.restaurantCategoryLabel}>Dining & Local Flavors</Text>
+                    {day.restaurants.map((restaurant, idx) => (
+                      <View key={idx} style={styles.restaurantItem}>
+                        <View style={styles.activityHeaderRow}>
+                          <Text style={styles.restaurantName}>{restaurant.name}</Text>
+                          <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", color: "#b45309" }}>
+                            {formatCurrency(restaurant.estimatedCost, currency)}
+                          </Text>
+                        </View>
+                        <Text style={styles.restaurantMeta}>
+                          {restaurant.meal} · {restaurant.cuisine} · {restaurant.location}
                         </Text>
                       </View>
-                      <Text style={styles.restaurantMeta}>
-                        {restaurant.meal} · {restaurant.cuisine} · {restaurant.location}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
+                    ))}
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
 
         {/* Travel Tips Section */}
         {itinerary.travelTips && itinerary.travelTips.length > 0 && (

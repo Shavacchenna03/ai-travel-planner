@@ -6,6 +6,7 @@ import { generateItinerary, TravelPlannerError } from "@/lib/ai/travel-planner";
 import { prisma } from "@/lib/prisma";
 import { tripRequestSchema } from "@/lib/trip-schema";
 import { getWeatherDataForTrip, type NormalizedWeatherData } from "@/lib/weather";
+import { getDailyNearbyPlaces } from "@/lib/places";
 
 export const runtime = "nodejs";
 
@@ -89,7 +90,32 @@ export async function POST(request: Request) {
     });
   }
 
-  // 4. Save Trip & Itinerary to PostgreSQL
+  // 4. Attach Geoapify POI Nearby Places to Daily Itineraries
+  if (process.env.GEOAPIFY_API_KEY) {
+    const destCoords =
+      weatherData?.latitude != null && weatherData?.longitude != null
+        ? { lat: weatherData.latitude, lon: weatherData.longitude }
+        : null;
+
+    if (destCoords) {
+      const usedPlaceNames = new Set<string>();
+      try {
+        itinerary.dailyItinerary = await Promise.all(
+          itinerary.dailyItinerary.map(async (day) => {
+            const places = await getDailyNearbyPlaces(day, destCoords, usedPlaceNames);
+            return {
+              ...day,
+              nearbyPlaces: places.length > 0 ? places : undefined,
+            };
+          })
+        );
+      } catch (placesErr) {
+        console.warn("[Roamly Places Debug] Geoapify POI lookup failed — preserving itinerary without POIs:", placesErr);
+      }
+    }
+  }
+
+  // 5. Save Trip & Itinerary to PostgreSQL
   try {
     const savedTrip = await prisma.trip.create({
       data: {

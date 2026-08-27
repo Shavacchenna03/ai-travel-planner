@@ -45,6 +45,21 @@ export const restaurantSchema = z.object({
   estimatedCost: z.number().nonnegative(),
 });
 
+export const nearbyPlaceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+  distanceKm: z.number(),
+  category: z.string(),
+  categories: z.array(z.string()),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  country: z.string().optional(),
+  website: z.string().optional(),
+  openingHours: z.string().optional(),
+});
+
 export const dailyItinerarySchema = z.object({
   day: z.number().int().min(1),
   title: z.string().min(1),
@@ -52,6 +67,7 @@ export const dailyItinerarySchema = z.object({
   restaurants: z.array(restaurantSchema),
   dailyEstimatedCost: z.number().nonnegative(),
   weather: weatherDataSchema.optional(),
+  nearbyPlaces: z.array(nearbyPlaceSchema).optional(),
 });
 
 export const itinerarySchema = z.object({
@@ -68,5 +84,6 @@ export type WeatherData = z.infer<typeof weatherDataSchema>;
 export type TripRequest = z.infer<typeof tripRequestSchema>;
 export type Activity = z.infer<typeof activitySchema>;
 export type Restaurant = z.infer<typeof restaurantSchema>;
+export type NearbyPlace = z.infer<typeof nearbyPlaceSchema>;
 export type DailyItinerary = z.infer<typeof dailyItinerarySchema>;
 export type Itinerary = z.infer<typeof itinerarySchema>;

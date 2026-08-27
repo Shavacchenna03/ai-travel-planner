@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import { auth } from "@/auth";
 import { regenerateActivity, regenerateDay, TravelPlannerError } from "@/lib/ai/travel-planner";
 import { activitySchema, dailyItinerarySchema, tripRequestSchema, weatherDataSchema } from "@/lib/trip-schema";
@@ -6,26 +7,28 @@ import { activitySchema, dailyItinerarySchema, tripRequestSchema, weatherDataSch
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  let body: Record<string, unknown>;
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Authentication required to regenerate itinerary items." }, { status: 401 });
-    }
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
 
-    const body = await request.json();
-    const { target, request: tripReq, dayNumber, instruction, dayWeather } = body;
+  const { target, dayNumber, instruction, dayWeather } = body;
+  const requestValidation = tripRequestSchema.safeParse(body.request);
 
-    const requestValidation = tripRequestSchema.safeParse(tripReq);
-    if (!requestValidation.success) {
-      return NextResponse.json({ error: "Invalid trip request context." }, { status: 400 });
-    }
+  if (!requestValidation.success) {
+    return NextResponse.json({ error: "Invalid trip request context." }, { status: 400 });
+  }
 
-    let parsedDayWeather = null;
-    if (dayWeather) {
-      const wValid = weatherDataSchema.safeParse(dayWeather);
-      if (wValid.success) parsedDayWeather = wValid.data;
-    }
+  const parsedDayWeather = dayWeather ? weatherDataSchema.safeParse(dayWeather).data : null;
 
+  try {
     if (target === "activity") {
       const activityValidation = activitySchema.safeParse(body.currentActivity);
       if (!activityValidation.success) {
@@ -57,9 +60,12 @@ export async function POST(request: Request) {
         instruction: typeof instruction === "string" ? instruction.trim() : undefined,
       });
 
-      // Preserve existing day weather if present
+      // Preserve existing day weather and nearbyPlaces if present
       if (dayValidation.data.weather) {
         newDay.weather = dayValidation.data.weather;
+      }
+      if (dayValidation.data.nearbyPlaces) {
+        newDay.nearbyPlaces = dayValidation.data.nearbyPlaces;
       }
 
       return NextResponse.json({ success: true, day: newDay });
