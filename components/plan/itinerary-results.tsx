@@ -87,23 +87,23 @@ function getMealDefaultMinutes(mealType: string): number {
 function buildDayTimeline(day: DailyItinerary): TimelineItem[] {
   const items: Array<TimelineItem & { sortMinutes: number }> = [];
 
-  (day.activities || []).forEach((activity, idx) => {
+  (Array.isArray(day?.activities) ? day.activities : []).forEach((activity, idx) => {
     items.push({
       id: `act-${idx}`,
       isMeal: false,
       activity,
       activityIndex: idx,
-      sortMinutes: parseTimeToMinutes(activity.startTime),
+      sortMinutes: parseTimeToMinutes(activity?.startTime),
     });
   });
 
-  (day.restaurants || []).forEach((restaurant, idx) => {
+  (Array.isArray(day?.restaurants) ? day.restaurants : []).forEach((restaurant, idx) => {
     items.push({
       id: `meal-${idx}`,
       isMeal: true,
       meal: restaurant,
       mealIndex: idx,
-      sortMinutes: getMealDefaultMinutes(restaurant.meal),
+      sortMinutes: getMealDefaultMinutes(restaurant?.meal),
     });
   });
 
@@ -161,9 +161,18 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
   if (!trip || (!trip.itinerary && !activeItinerary)) return <EmptyResults />;
 
   const itinerary: Itinerary = activeItinerary || trip.itinerary;
-  const { request, tripId } = trip;
-  const currency = itinerary.currency || request.currency || "INR";
+  const request = trip?.request;
+  const tripId = trip?.tripId;
+  const currency = itinerary?.currency || request?.currency || "INR";
+  const duration = request?.duration ?? itinerary?.dailyItinerary?.length ?? 1;
+  const travelers = request?.travelers ?? 1;
   const canDelete = Boolean(showDelete || (tripId && initialTrip));
+
+  const subtitleParts = [
+    `${duration} Days`,
+    request?.travelers ? `${request.travelers} ${request.travelers === 1 ? "Traveler" : "Travelers"}` : null,
+    request?.style ? `${request.style} Style` : null,
+  ].filter(Boolean);
 
   function handleSelectDay(dayNum: number) {
     setActiveDayNumber(dayNum);
@@ -507,7 +516,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
               {itinerary.destination}
             </h1>
             <p className="mt-2 text-sm sm:text-base font-semibold text-slate-600">
-              {request.duration} Days · {request.travelers} {request.travelers === 1 ? "Traveler" : "Travelers"} · {request.style} Style
+              {subtitleParts.join(" · ")}
             </p>
           </div>
 
@@ -548,7 +557,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
 
         {/* Budget Breakdown Summary */}
         <div className="mt-8">
-          <BudgetBreakdownCard itinerary={itinerary} currency={currency} travelers={request.travelers} />
+          <BudgetBreakdownCard itinerary={itinerary} currency={currency} travelers={travelers} />
           {itinerary.summary && (
             <p className="pt-6 text-base sm:text-lg leading-relaxed text-slate-600">
               {itinerary.summary}
@@ -558,14 +567,14 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
 
         {/* Trip Weather Outlook Hero Card */}
         <div className="mt-8">
-          <TripWeatherOutlook dailyItinerary={itinerary.dailyItinerary} />
+          <TripWeatherOutlook dailyItinerary={itinerary?.dailyItinerary || []} />
         </div>
 
         {/* Main Grid: Day Cards (Left) vs Day Checklist & Navigation Sidebar (Right) */}
         <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_22rem]">
           {/* Left Column: Day Cards Stack */}
           <div className="space-y-10">
-            {itinerary.dailyItinerary.map((day) => {
+            {(itinerary?.dailyItinerary || []).map((day) => {
               const dayInsight = getWeatherDayInsight(day.weather);
               const warnings = getWeatherWarnings(day.weather);
               const timelineItems = buildDayTimeline(day);
@@ -1006,7 +1015,12 @@ function subscribe(callback: () => void) {
 function readStoredTrip(): StoredTrip | null {
   try {
     const raw = localStorage.getItem("roamly_trip");
-    return raw ? (JSON.parse(raw) as StoredTrip) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !parsed.itinerary || !Array.isArray(parsed.itinerary.dailyItinerary)) {
+      return null;
+    }
+    return parsed as StoredTrip;
   } catch {
     return null;
   }

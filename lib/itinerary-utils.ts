@@ -96,15 +96,17 @@ export function calculateBudgetBreakdown(itinerary: Itinerary, _request?: TripRe
   let activities = 0;
   let food = 0;
 
-  for (const day of itinerary.dailyItinerary) {
-    if (Array.isArray(day.activities)) {
-      for (const act of day.activities) {
-        activities += Number(act.estimatedCost) || 0;
+  if (Array.isArray(itinerary?.dailyItinerary)) {
+    for (const day of itinerary.dailyItinerary) {
+      if (Array.isArray(day?.activities)) {
+        for (const act of day.activities) {
+          activities += Number(act?.estimatedCost) || 0;
+        }
       }
-    }
-    if (Array.isArray(day.restaurants)) {
-      for (const rest of day.restaurants) {
-        food += Number(rest.estimatedCost) || 0;
+      if (Array.isArray(day?.restaurants)) {
+        for (const rest of day.restaurants) {
+          food += Number(rest?.estimatedCost) || 0;
+        }
       }
     }
   }
