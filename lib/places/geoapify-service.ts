@@ -1,14 +1,58 @@
 import type { FetchNearbyPlacesOptions, GeoapifyPlacesResponse, NearbyPlace } from "./types";
 
-const DEFAULT_CATEGORIES = [
-  "tourism",
+const DEFAULT_RECOMMENDATION_CATEGORIES = [
+  "catering.restaurant",
+  "catering.cafe",
+  "commercial.food_and_drink.bakery",
+  "commercial.marketplace",
+  "commercial.shopping_mall",
+  "commercial.gift_and_souvenir",
+  "commercial.food_and_drink",
+  "entertainment.culture",
+  "leisure.park",
   "tourism.attraction",
-  "tourism.sights",
-  "entertainment",
-  "leisure",
-  "heritage",
-  "natural",
 ];
+
+/**
+ * Centralized mapping function converting raw Geoapify category identifiers
+ * into friendly human-readable category labels for UI and PDF display.
+ */
+export function getFriendlyCategoryLabel(categories: string[] = [], rawCategory?: string): string {
+  const catStr = [...categories, rawCategory || ""].join(" ").toLowerCase();
+
+  if (catStr.includes("marketplace") || catStr.includes("bazaar")) {
+    return "Traditional Market";
+  }
+  if (catStr.includes("gift_and_souvenir") || catStr.includes("handicraft") || catStr.includes("art_craft")) {
+    return "Handicrafts";
+  }
+  if (catStr.includes("cafe") || catStr.includes("coffee")) {
+    return "Café";
+  }
+  if (catStr.includes("bakery") || catStr.includes("pastry")) {
+    return "Bakery";
+  }
+  if (catStr.includes("restaurant") || catStr.includes("food_and_drink") || catStr.includes("catering.fast_food")) {
+    return "Food & Dining";
+  }
+  if (catStr.includes("shopping_mall") || catStr.includes("commercial.clothing") || catStr.includes("department_store")) {
+    return "Shopping";
+  }
+  if (catStr.includes("nightclub") || catStr.includes("bar") || catStr.includes("pub")) {
+    return "Nightlife";
+  }
+  if (catStr.includes("entertainment") || catStr.includes("culture") || catStr.includes("cinema")) {
+    return "Local Experience";
+  }
+  if (catStr.includes("leisure.park") || catStr.includes("natural") || catStr.includes("viewpoint")) {
+    return "Scenic Spot";
+  }
+  if (catStr.includes("tourism.attraction") || catStr.includes("tourism.sights")) {
+    return "Local Attraction";
+  }
+
+  return "Local Spot";
+}
 
 export async function fetchNearbyPlacesFromGeoapify(
   options: FetchNearbyPlacesOptions
@@ -19,7 +63,7 @@ export async function fetchNearbyPlacesFromGeoapify(
     return [];
   }
 
-  const { latitude, longitude, radiusMeters = 5000, categories = DEFAULT_CATEGORIES, limit = 20 } = options;
+  const { latitude, longitude, radiusMeters = 5000, categories = DEFAULT_RECOMMENDATION_CATEGORIES, limit = 30 } = options;
 
   if (latitude == null || longitude == null || isNaN(latitude) || isNaN(longitude)) {
     console.warn("[Roamly Places] Invalid coordinates provided for Geoapify lookup.");
@@ -64,14 +108,7 @@ export async function fetchNearbyPlacesFromGeoapify(
       const distanceKm = Number((distMeters / 1000).toFixed(1));
 
       const rawCatList = p.categories || [];
-      const primaryCategory = p.category || rawCatList[0] || "tourism.attraction";
-
-      // Format category label
-      let formattedCategory = primaryCategory
-        .split(".")
-        .pop()
-        ?.replace(/_/g, " ") || "attraction";
-      formattedCategory = formattedCategory.charAt(0).toUpperCase() + formattedCategory.slice(1);
+      const formattedCategory = getFriendlyCategoryLabel(rawCatList, p.category);
 
       places.push({
         id: p.place_id || `${p.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${placeLat}-${placeLon}`,

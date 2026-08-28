@@ -5,7 +5,7 @@ import { auth } from "@/auth";
 import { generateItinerary, TravelPlannerError } from "@/lib/ai/travel-planner";
 import { prisma } from "@/lib/prisma";
 import { tripRequestSchema } from "@/lib/trip-schema";
-import { getWeatherDataForTrip, type NormalizedWeatherData } from "@/lib/weather";
+import { getWeatherDataForTrip, geocodeDestination, type NormalizedWeatherData } from "@/lib/weather";
 import { getDailyNearbyPlaces } from "@/lib/places";
 
 export const runtime = "nodejs";
@@ -92,17 +92,28 @@ export async function POST(request: Request) {
 
   // 4. Attach Geoapify POI Nearby Places to Daily Itineraries
   if (process.env.GEOAPIFY_API_KEY) {
-    const destCoords =
+    console.log("[Roamly Places Debug] Geoapify is configured. Processing POI recommendations...");
+    let destCoords =
       weatherData?.latitude != null && weatherData?.longitude != null
         ? { lat: weatherData.latitude, lon: weatherData.longitude }
         : null;
 
+    if (!destCoords) {
+      console.log(`[Roamly Places Debug] Weather coordinates unavailable. Resolving geocoding for "${parsedInput.data.destination}"...`);
+      const geocoded = await geocodeDestination(parsedInput.data.destination);
+      if (geocoded) {
+        destCoords = { lat: geocoded.latitude, lon: geocoded.longitude };
+      }
+    }
+
     if (destCoords) {
       const usedPlaceNames = new Set<string>();
+      console.log(`[Roamly Places Debug] Fetching POIs around coordinates lat=${destCoords.lat}, lon=${destCoords.lon} for ${itinerary.dailyItinerary.length} days...`);
       try {
         itinerary.dailyItinerary = await Promise.all(
           itinerary.dailyItinerary.map(async (day) => {
             const places = await getDailyNearbyPlaces(day, destCoords, usedPlaceNames);
+            console.log(`[Roamly Places Debug] Day ${day.day} ("${day.title}"): Attached ${places.length} nearby recommendations.`);
             return {
               ...day,
               nearbyPlaces: places.length > 0 ? places : undefined,
@@ -112,7 +123,11 @@ export async function POST(request: Request) {
       } catch (placesErr) {
         console.warn("[Roamly Places Debug] Geoapify POI lookup failed — preserving itinerary without POIs:", placesErr);
       }
+    } else {
+      console.warn(`[Roamly Places Debug] Could not resolve coordinates for "${parsedInput.data.destination}". Skipping POI lookup.`);
     }
+  } else {
+    console.log("[Roamly Places Debug] GEOAPIFY_API_KEY is not configured in environment. Skipping POI lookup.");
   }
 
   // 5. Save Trip & Itinerary to PostgreSQL

@@ -459,12 +459,12 @@ export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumen
                   </View>
                 )}
 
-                {/* Nearby Places PDF Box */}
+                {/* Nearby Recommendations PDF Box */}
                 {day.nearbyPlaces && day.nearbyPlaces.length > 0 && (
                   <View style={styles.nearbyPdfBox}>
-                    <Text style={styles.nearbyPdfCategoryLabel}>NEARBY PLACES</Text>
+                    <Text style={styles.nearbyPdfCategoryLabel}>NEARBY RECOMMENDATIONS</Text>
                     <Text style={styles.nearbyPdfText}>
-                      {day.nearbyPlaces.map((p) => `• ${p.name} (${p.distanceKm} km away)`).join("   ")}
+                      {day.nearbyPlaces.map((p) => `• ${p.name} — ${p.category} — ${p.distanceKm} km`).join("   ")}
                     </Text>
                   </View>
                 )}

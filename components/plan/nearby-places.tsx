@@ -14,15 +14,15 @@ export function NearbyPlaces({ places }: NearbyPlacesProps) {
           <span className="text-base">📍</span>
           <div>
             <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#166534]">
-              Nearby Places
+              Nearby Recommendations
             </h3>
             <p className="text-[11px] font-medium text-slate-500">
-              Optional attractions around today&apos;s itinerary
+              Useful local spots near today&apos;s itinerary
             </p>
           </div>
         </div>
         <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-          {places.length} Nearby
+          {places.length} Spots
         </span>
       </div>
 
@@ -42,8 +42,8 @@ export function NearbyPlaces({ places }: NearbyPlacesProps) {
                 </span>
               </div>
 
-              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700 font-bold">
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                <span className="rounded-md bg-emerald-100/70 px-2 py-0.5 text-[10px] text-emerald-800 font-bold border border-emerald-200">
                   {place.category}
                 </span>
                 {place.city && <span>· {place.city}</span>}

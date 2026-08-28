@@ -1,4 +1,4 @@
-import type { DailyItinerary, NearbyPlace } from "@/lib/trip-schema";
+import type { DailyItinerary, NearbyPlace, WeatherData } from "@/lib/trip-schema";
 import { fetchNearbyPlacesFromGeoapify } from "./geoapify-service";
 
 /**
@@ -39,15 +39,17 @@ export function isEquivalentPlace(placeName: string, targetName: string): boolea
 
 /**
  * Pure deterministic ranking function for POI candidates based on:
- * 1. Category relevance (tourism/heritage/natural > leisure)
- * 2. Distance from search anchor
- * 3. Name length / quality
+ * 1. Category relevance (Bazaars / Markets / Cafés / Food Streets > Generic Attractions)
+ * 2. Weather context (Indoor cafés/shopping on rain/hot days)
+ * 3. Distance from search anchor
+ * 4. Deduplication against planned activities & previous days
  */
 export function rankNearbyPlaces(
   places: NearbyPlace[],
   anchorCoords: { lat: number; lon: number },
   existingActivityTexts: string[],
-  usedPlaceNames: Set<string>
+  usedPlaceNames: Set<string>,
+  weather?: WeatherData | null
 ): NearbyPlace[] {
   const uniquePlaces: NearbyPlace[] = [];
   const seenLocalNames = new Set<string>();
@@ -80,10 +82,10 @@ export function rankNearbyPlaces(
     seenLocalNames.add(normName);
   }
 
-  // Rank places by distance and category weight
+  // Rank places by category relevance, weather weight, and distance
   uniquePlaces.sort((a, b) => {
-    const catWeightA = getCategoryWeight(a.categories || []);
-    const catWeightB = getCategoryWeight(b.categories || []);
+    const catWeightA = getCategoryWeight(a, weather);
+    const catWeightB = getCategoryWeight(b, weather);
 
     if (catWeightA !== catWeightB) {
       return catWeightB - catWeightA; // Higher weight first
@@ -95,13 +97,76 @@ export function rankNearbyPlaces(
   return uniquePlaces;
 }
 
-function getCategoryWeight(categories: string[]): number {
-  const catStr = categories.join(" ").toLowerCase();
-  if (catStr.includes("tourism.attraction") || catStr.includes("tourism.sights")) return 5;
-  if (catStr.includes("heritage") || catStr.includes("historic")) return 4;
-  if (catStr.includes("natural") || catStr.includes("park")) return 3;
-  if (catStr.includes("entertainment") || catStr.includes("leisure")) return 2;
-  return 1;
+/**
+ * Calculates priority weight for POI categories with weather adjustments.
+ */
+export function getCategoryWeight(place: NearbyPlace, weather?: WeatherData | null): number {
+  const catStr = [...(place.categories || []), place.category].join(" ").toLowerCase();
+  const nameStr = place.name.toLowerCase();
+
+  let weight = 1;
+
+  // HIGH PRIORITY (Weight 5): Traditional markets, bazaars, local food streets, handicraft centers
+  if (
+    catStr.includes("marketplace") ||
+    catStr.includes("bazaar") ||
+    nameStr.includes("bazaar") ||
+    nameStr.includes("market") ||
+    nameStr.includes("food street") ||
+    catStr.includes("gift_and_souvenir")
+  ) {
+    weight = 5;
+  }
+  // MEDIUM-HIGH PRIORITY (Weight 4): Cafés, bakeries, local food & dining, shopping malls
+  else if (
+    catStr.includes("cafe") ||
+    catStr.includes("bakery") ||
+    catStr.includes("restaurant") ||
+    catStr.includes("food_and_drink") ||
+    catStr.includes("shopping_mall")
+  ) {
+    weight = 4;
+  }
+  // MEDIUM PRIORITY (Weight 3): Local cultural experiences, entertainment, parks
+  else if (
+    catStr.includes("entertainment") ||
+    catStr.includes("culture") ||
+    catStr.includes("leisure.park") ||
+    catStr.includes("nightclub") ||
+    catStr.includes("bar")
+  ) {
+    weight = 3;
+  }
+  // LOW PRIORITY (Weight 2): Standard tourist attractions (so they don't dominate)
+  else if (catStr.includes("tourism.attraction") || catStr.includes("tourism.sights")) {
+    weight = 2;
+  }
+
+  // Weather awareness adjustment
+  if (weather) {
+    const cond = (weather.condition || "").toLowerCase();
+    const isRainy =
+      (weather.precipitationProbability != null && weather.precipitationProbability >= 40) ||
+      (weather.precipitationMm != null && weather.precipitationMm >= 2.0) ||
+      cond.includes("rain") ||
+      cond.includes("drizzle") ||
+      cond.includes("thunderstorm");
+    const isHot = weather.temperatureMax != null && weather.temperatureMax >= 32;
+
+    // Rainy or Hot Days: Boost indoor cafés, restaurants, bakeries, shopping malls, covered markets
+    if (isRainy || isHot) {
+      if (
+        catStr.includes("cafe") ||
+        catStr.includes("bakery") ||
+        catStr.includes("restaurant") ||
+        catStr.includes("shopping_mall")
+      ) {
+        weight += 2;
+      }
+    }
+  }
+
+  return weight;
 }
 
 /**
@@ -124,16 +189,22 @@ export async function getDailyNearbyPlaces(
     latitude: destinationCoords.lat,
     longitude: destinationCoords.lon,
     radiusMeters: 5000,
-    limit: 25,
+    limit: 30,
   });
 
   if (!rawCandidates || rawCandidates.length === 0) {
     return [];
   }
 
-  const ranked = rankNearbyPlaces(rawCandidates, destinationCoords, existingActivityTexts, usedPlaceNames);
+  const ranked = rankNearbyPlaces(
+    rawCandidates,
+    destinationCoords,
+    existingActivityTexts,
+    usedPlaceNames,
+    day.weather
+  );
 
-  // Return top 3-5 places
+  // Return top 3-4 places per day
   const selected = ranked.slice(0, 4);
 
   // Record selected place names to prevent duplicates in subsequent days
