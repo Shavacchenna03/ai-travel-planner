@@ -238,9 +238,9 @@ export function TripPlanningForm() {
               <FieldError message={errors.travelers} />
             </div>
 
-            <div>
+            <div className="sm:col-span-2">
               <FieldLabel htmlFor="budget">Total Group Budget</FieldLabel>
-              <div className="flex gap-2">
+              <div className="mt-2 grid grid-cols-[1fr_130px] gap-2 items-center">
                 <Input
                   id="budget"
                   type="number"
@@ -248,7 +248,7 @@ export function TripPlanningForm() {
                   value={values.budget}
                   onChange={update("budget")}
                   placeholder="e.g. 35000"
-                  className="flex-1"
+                  className="!mt-0 w-full min-w-0 text-base font-semibold"
                   aria-describedby="budget-help"
                   aria-invalid={Boolean(errors.budget)}
                 />
@@ -256,7 +256,7 @@ export function TripPlanningForm() {
                   id="currency"
                   value={values.currency}
                   onChange={update("currency")}
-                  className="w-28 shrink-0 font-bold"
+                  className="!mt-0 !w-[130px] shrink-0 font-bold"
                 >
                   <option value="INR">INR (₹)</option>
                   <option value="USD">USD ($)</option>

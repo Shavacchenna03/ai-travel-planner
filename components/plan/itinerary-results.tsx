@@ -7,7 +7,7 @@ import { useState, useSyncExternalStore, type DragEvent } from "react";
 import { ActivityEditorModal } from "@/components/plan/activity-editor-modal";
 import { AIRegenerateModal } from "@/components/plan/ai-regenerate-modal";
 import { BudgetBreakdownCard } from "@/components/plan/budget-breakdown-card";
-import { DailyCarryChecklist } from "@/components/plan/daily-carry-checklist";
+import { DayChecklistSidebar } from "@/components/plan/day-checklist-sidebar";
 import { MoveActivityModal } from "@/components/plan/move-activity-modal";
 import { NearbyPlaces } from "@/components/plan/nearby-places";
 import { TripWeatherOutlook } from "@/components/plan/trip-weather-outlook";
@@ -15,7 +15,6 @@ import { WeatherIcon } from "@/components/weather-icon";
 import { Button } from "@/components/ui/button";
 import {
   ArrowUpDown,
-  Calendar,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -26,9 +25,7 @@ import {
   MapPin,
   Plus,
   Sparkles,
-  Tag,
   Trash2,
-  Users,
   Utensils,
 } from "@/components/icons";
 import { NavigationHeader } from "@/components/navigation-header";
@@ -40,7 +37,7 @@ import {
   recalculateItineraryCosts,
   reorderActivityInDay,
 } from "@/lib/itinerary-utils";
-import type { Activity, DailyItinerary, Itinerary, TripRequest } from "@/lib/trip-schema";
+import type { Activity, DailyItinerary, Itinerary, Restaurant, TripRequest } from "@/lib/trip-schema";
 import {
   getWeatherActivityContext,
   getWeatherDayInsight,
@@ -54,12 +51,72 @@ type ItineraryResultsProps = {
   showDelete?: boolean;
 };
 
+export type TimelineItem =
+  | {
+      id: string;
+      isMeal: false;
+      activity: Activity;
+      activityIndex: number;
+    }
+  | {
+      id: string;
+      isMeal: true;
+      meal: Restaurant;
+      mealIndex: number;
+    };
+
+function parseTimeToMinutes(timeStr: string): number {
+  if (!timeStr) return 700;
+  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return 700;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  if (/pm/i.test(timeStr) && hours < 12) hours += 12;
+  if (/am/i.test(timeStr) && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+}
+
+function getMealDefaultMinutes(mealType: string): number {
+  const m = (mealType || "").toLowerCase();
+  if (m.includes("breakfast")) return 510; // 08:30 AM
+  if (m.includes("lunch")) return 780; // 01:00 PM
+  if (m.includes("dinner")) return 1200; // 08:00 PM
+  return 840;
+}
+
+function buildDayTimeline(day: DailyItinerary): TimelineItem[] {
+  const items: Array<TimelineItem & { sortMinutes: number }> = [];
+
+  (day.activities || []).forEach((activity, idx) => {
+    items.push({
+      id: `act-${idx}`,
+      isMeal: false,
+      activity,
+      activityIndex: idx,
+      sortMinutes: parseTimeToMinutes(activity.startTime),
+    });
+  });
+
+  (day.restaurants || []).forEach((restaurant, idx) => {
+    items.push({
+      id: `meal-${idx}`,
+      isMeal: true,
+      meal: restaurant,
+      mealIndex: idx,
+      sortMinutes: getMealDefaultMinutes(restaurant.meal),
+    });
+  });
+
+  return items.sort((a, b) => a.sortMinutes - b.sortMinutes);
+}
+
 export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsProps) {
   const router = useRouter();
   const clientStoredTrip = useSyncExternalStore(subscribe, readStoredTrip, getServerSnapshot);
   const trip = initialTrip ?? clientStoredTrip;
 
   const [activeItinerary, setActiveItinerary] = useState<Itinerary | null>(null);
+  const [activeDayNumber, setActiveDayNumber] = useState<number>(1);
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState("");
@@ -70,7 +127,6 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
 
   // Editor modal state
   const [editorState, setEditorState] = useState<{
@@ -95,8 +151,6 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
     dayNumber: number;
     activityIndex?: number;
     targetTitle: string;
-    currentActivity?: Activity;
-    currentDay?: DailyItinerary;
     initialInstruction?: string;
   }>({ isOpen: false, target: "activity", dayNumber: 1, targetTitle: "" });
 
@@ -109,235 +163,211 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
   const itinerary: Itinerary = activeItinerary || trip.itinerary;
   const { request, tripId } = trip;
   const currency = itinerary.currency || request.currency || "INR";
-  const canDelete = showDelete || Boolean(tripId);
+  const canDelete = Boolean(showDelete || (tripId && initialTrip));
 
-  // Persist updated itinerary to React state, sessionStorage, and PostgreSQL DB if saved
-  async function saveUpdatedItinerary(nextItinerary: Itinerary, feedbackMsg = "Changes saved") {
-    const recalculated = recalculateItineraryCosts(nextItinerary);
-    const previousItinerary = itinerary;
-    setActiveItinerary(recalculated);
-    setIsSaving(true);
-
-    const updatedStoredTrip: StoredTrip = {
-      ...trip!,
-      itinerary: recalculated,
-    };
-
-    // Update browser storage
-    try {
-      sessionStorage.setItem("roamly-current-itinerary", JSON.stringify(updatedStoredTrip));
-      localStorage.setItem("roamly-current-itinerary", JSON.stringify(updatedStoredTrip));
-      window.dispatchEvent(new Event("roamly-storage-update"));
-    } catch (e) {
-      console.warn("Could not save to browser storage:", e);
+  function handleSelectDay(dayNum: number) {
+    setActiveDayNumber(dayNum);
+    const el = document.getElementById(`day-${dayNum}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+  }
 
-    // Persist to PostgreSQL if saved trip
+  function showToast(msg: string) {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage("");
+    }, 4000);
+  }
+
+  async function updateAndSaveItinerary(newItinerary: Itinerary, toastNotice = "Itinerary updated") {
+    const updated = recalculateItineraryCosts(newItinerary);
+    setActiveItinerary(updated);
+    showToast(toastNotice);
+
     if (tripId) {
       try {
         const res = await fetch(`/api/trips/${tripId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ itinerary: recalculated }),
+          body: JSON.stringify({ itinerary: updated }),
         });
 
         if (!res.ok) {
-          throw new Error("Failed to save to database");
+          console.error("[Roamly Save Error] Failed to persist itinerary changes to database.");
         }
       } catch (err) {
-        console.error("Failed to persist itinerary update to DB:", err);
-        // Revert state if DB save failed
-        setActiveItinerary(previousItinerary);
-        setToastMessage("❌ Failed to save changes. Please try again.");
-        setIsSaving(false);
-        setTimeout(() => setToastMessage(""), 4000);
-        return;
+        console.error("[Roamly Save Error] Network error persisting itinerary:", err);
+      }
+    } else {
+      try {
+        const raw = localStorage.getItem("roamly_trip");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          parsed.itinerary = updated;
+          localStorage.setItem("roamly_trip", JSON.stringify(parsed));
+        }
+      } catch {
+        // Ignore localStorage error
       }
     }
-
-    setIsSaving(false);
-    setToastMessage(`✓ ${feedbackMsg}`);
-    setTimeout(() => setToastMessage(""), 3500);
   }
 
-  // --- Handlers for Drag and Drop --- //
+  // --- Handlers: Activity Editing & Creation ---
+  function handleOpenAddActivity(dayNumber: number) {
+    setEditorState({
+      isOpen: true,
+      dayNumber,
+      activityIndex: undefined,
+      initialActivity: null,
+    });
+  }
 
+  function handleOpenEditActivity(dayNumber: number, activityIndex: number, activity: Activity) {
+    setEditorState({
+      isOpen: true,
+      dayNumber,
+      activityIndex,
+      initialActivity: activity,
+    });
+  }
+
+  function handleSaveActivity(savedActivity: Activity) {
+    const { dayNumber, activityIndex } = editorState;
+    const days = [...itinerary.dailyItinerary];
+    const targetDayIndex = days.findIndex((d) => d.day === dayNumber);
+    if (targetDayIndex === -1) return;
+
+    const targetDay = { ...days[targetDayIndex] };
+    const activities = [...targetDay.activities];
+
+    if (typeof activityIndex === "number" && activityIndex >= 0) {
+      activities[activityIndex] = savedActivity;
+    } else {
+      activities.push(savedActivity);
+    }
+
+    targetDay.activities = activities;
+    days[targetDayIndex] = targetDay;
+
+    updateAndSaveItinerary(
+      { ...itinerary, dailyItinerary: days },
+      typeof activityIndex === "number" ? "Activity updated" : "Activity added"
+    );
+  }
+
+  function handleDeleteActivity(dayNumber: number, activityIndex: number) {
+    const days = [...itinerary.dailyItinerary];
+    const targetDayIndex = days.findIndex((d) => d.day === dayNumber);
+    if (targetDayIndex === -1) return;
+
+    const targetDay = { ...days[targetDayIndex] };
+    const activities = targetDay.activities.filter((_, idx) => idx !== activityIndex);
+
+    targetDay.activities = activities;
+    days[targetDayIndex] = targetDay;
+
+    updateAndSaveItinerary({ ...itinerary, dailyItinerary: days }, "Activity removed");
+  }
+
+  // --- Handlers: Reordering & Moving Activities ---
+  function handleMoveUp(dayNumber: number, activityIndex: number) {
+    const updated = moveActivityUp(itinerary, dayNumber, activityIndex);
+    updateAndSaveItinerary(updated, "Activity moved up");
+  }
+
+  function handleMoveDown(dayNumber: number, activityIndex: number) {
+    const updated = moveActivityDown(itinerary, dayNumber, activityIndex);
+    updateAndSaveItinerary(updated, "Activity moved down");
+  }
+
+  function handleOpenMoveModal(dayNumber: number, activityIndex: number, activity: Activity) {
+    setMoveModalState({
+      isOpen: true,
+      dayNumber,
+      activityIndex,
+      activity,
+    });
+  }
+
+  function handleConfirmMoveActivity(targetDayNumber: number) {
+    if (!moveModalState) return;
+    const { dayNumber, activityIndex } = moveModalState;
+
+    const updated = moveActivityBetweenDays(
+      itinerary,
+      dayNumber,
+      activityIndex,
+      targetDayNumber
+    );
+
+    updateAndSaveItinerary(updated, `Activity moved to Day ${targetDayNumber}`);
+    setMoveModalState(null);
+  }
+
+  // Drag and Drop Handlers
   function handleDragStart(e: DragEvent<HTMLDivElement>, dayNumber: number, activityIndex: number) {
     setDraggedItem({ dayNumber, activityIndex });
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", JSON.stringify({ dayNumber, activityIndex }));
   }
 
   function handleDragOver(e: DragEvent<HTMLDivElement>, dayNumber: number, activityIndex: number) {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    if (dropTarget?.dayNumber !== dayNumber || dropTarget?.activityIndex !== activityIndex) {
+    if (!dropTarget || dropTarget.dayNumber !== dayNumber || dropTarget.activityIndex !== activityIndex) {
       setDropTarget({ dayNumber, activityIndex });
     }
   }
 
-  function handleDragLeave(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault();
+  function handleDragLeave() {
+    setDropTarget(null);
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>, targetDayNumber: number, targetActivityIndex: number) {
     e.preventDefault();
-    setDropTarget(null);
-
     if (!draggedItem) return;
 
-    const { dayNumber: sourceDay, activityIndex: sourceIndex } = draggedItem;
-    setDraggedItem(null);
-
-    if (sourceDay === targetDayNumber && sourceIndex === targetActivityIndex) {
-      return; // No-op
-    }
+    const { dayNumber: sourceDay, activityIndex: sourceIdx } = draggedItem;
 
     if (sourceDay === targetDayNumber) {
-      const nextItinerary = reorderActivityInDay(itinerary, sourceDay, sourceIndex, targetActivityIndex);
-      saveUpdatedItinerary(nextItinerary, `Activity reordered on Day ${sourceDay}`);
+      if (sourceIdx !== targetActivityIndex) {
+        const updated = reorderActivityInDay(itinerary, sourceDay, sourceIdx, targetActivityIndex);
+        updateAndSaveItinerary(updated, "Activity reordered");
+      }
     } else {
-      const nextItinerary = moveActivityBetweenDays(
+      const updated = moveActivityBetweenDays(
         itinerary,
         sourceDay,
-        sourceIndex,
-        targetDayNumber,
-        targetActivityIndex
+        sourceIdx,
+        targetDayNumber
       );
-      saveUpdatedItinerary(nextItinerary, `Activity moved from Day ${sourceDay} to Day ${targetDayNumber}`);
+      updateAndSaveItinerary(updated, `Activity moved to Day ${targetDayNumber}`);
     }
-  }
 
-  function handleDropOnEmptyDay(e: DragEvent<HTMLDivElement>, targetDayNumber: number) {
-    e.preventDefault();
-    setDropTarget(null);
-
-    if (!draggedItem) return;
-
-    const { dayNumber: sourceDay, activityIndex: sourceIndex } = draggedItem;
     setDraggedItem(null);
-
-    const nextItinerary = moveActivityBetweenDays(itinerary, sourceDay, sourceIndex, targetDayNumber, 0);
-    saveUpdatedItinerary(nextItinerary, `Activity moved to Day ${targetDayNumber}`);
+    setDropTarget(null);
   }
 
-  // --- Handlers for Move Up / Move Down / Move Modal --- //
-
-  function handleMoveUp(dayNumber: number, activityIndex: number) {
-    const nextItinerary = moveActivityUp(itinerary, dayNumber, activityIndex);
-    saveUpdatedItinerary(nextItinerary, "Activity moved up");
-  }
-
-  function handleMoveDown(dayNumber: number, activityIndex: number) {
-    const nextItinerary = moveActivityDown(itinerary, dayNumber, activityIndex);
-    saveUpdatedItinerary(nextItinerary, "Activity moved down");
-  }
-
-  function handleConfirmMoveModal(targetDayNumber: number, targetPosition: "beginning" | "end") {
-    if (!moveModalState) return;
-    const { dayNumber: sourceDay, activityIndex: sourceIndex } = moveModalState;
-
-    const targetDayObj = itinerary.dailyItinerary.find((d) => d.day === targetDayNumber);
-    const targetIndex = targetPosition === "beginning" ? 0 : targetDayObj ? targetDayObj.activities.length : 0;
-
-    const nextItinerary = moveActivityBetweenDays(
-      itinerary,
-      sourceDay,
-      sourceIndex,
-      targetDayNumber,
-      targetIndex
-    );
-
-    saveUpdatedItinerary(nextItinerary, `Activity moved to Day ${targetDayNumber}`);
-    setMoveModalState(null);
-  }
-
-  // --- Handlers for Activity Operations --- //
-
-  function handleOpenAddActivity(dayNumber: number) {
-    setEditorState({
-      isOpen: true,
-      dayNumber,
-      initialActivity: null,
-    });
-  }
-
-  function handleOpenEditActivity(dayNumber: number, activityIndex: number, act: Activity) {
-    setEditorState({
-      isOpen: true,
-      dayNumber,
-      activityIndex,
-      initialActivity: act,
-    });
-  }
-
-  function handleSaveActivityFromModal(savedActivity: Activity) {
-    const { dayNumber, activityIndex } = editorState;
-
-    const nextDailyItinerary = itinerary.dailyItinerary.map((day) => {
-      if (day.day !== dayNumber) return day;
-
-      const nextActivities = [...day.activities];
-      if (activityIndex !== undefined && activityIndex >= 0) {
-        nextActivities[activityIndex] = savedActivity;
-      } else {
-        nextActivities.push(savedActivity);
-      }
-
-      return {
-        ...day,
-        activities: nextActivities,
-      };
-    });
-
-    const isEdit = activityIndex !== undefined && activityIndex >= 0;
-    saveUpdatedItinerary(
-      { ...itinerary, dailyItinerary: nextDailyItinerary },
-      isEdit ? "Activity updated" : "Activity added"
-    );
-  }
-
-  function handleDeleteActivity(dayNumber: number, activityIndex: number) {
-    const nextDailyItinerary = itinerary.dailyItinerary.map((day) => {
-      if (day.day !== dayNumber) return day;
-      return {
-        ...day,
-        activities: day.activities.filter((_, idx) => idx !== activityIndex),
-      };
-    });
-
-    saveUpdatedItinerary(
-      { ...itinerary, dailyItinerary: nextDailyItinerary },
-      "Activity removed"
-    );
-  }
-
-  // --- Handlers for AI Regeneration Operations --- //
-
-  function handleOpenRegenerateActivity(dayNumber: number, activityIndex: number, act: Activity) {
+  // --- Handlers: AI Partial Regeneration ---
+  function handleOpenRegenerateActivity(dayNumber: number, activityIndex: number, activity: Activity) {
     setAiModalState({
       isOpen: true,
       target: "activity",
       dayNumber,
       activityIndex,
-      targetTitle: act.name,
-      currentActivity: act,
+      targetTitle: activity.name,
       initialInstruction: "",
     });
   }
 
-  function handleOpenRegenerateActivityForWeather(dayNumber: number, activityIndex: number, act: Activity) {
-    const targetDayObj = itinerary.dailyItinerary.find((d) => d.day === dayNumber);
-    const insight = getWeatherDayInsight(targetDayObj?.weather);
-
+  function handleOpenRegenerateActivityForWeather(dayNumber: number, activityIndex: number, activity: Activity) {
     setAiModalState({
       isOpen: true,
       target: "activity",
       dayNumber,
       activityIndex,
-      targetTitle: `${act.name} (Weather Optimized)`,
-      currentActivity: act,
-      initialInstruction: `Replace this activity with an alternative perfectly suited for the expected weather: ${insight}`,
+      targetTitle: `${activity.name} (Weather Alternative)`,
+      initialInstruction: "Suggest an indoor/weather-safe alternative for this outdoor activity.",
     });
   }
 
@@ -347,110 +377,83 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
       target: "day",
       dayNumber,
       targetTitle: `Day ${dayNumber}: ${day.title}`,
-      currentDay: day,
       initialInstruction: "",
     });
   }
 
-  function handleOpenRegenerateDayForWeather(dayNumber: number, day: DailyItinerary) {
-    const insight = getWeatherDayInsight(day.weather);
-
+  function handleOpenRegenerateDayForWeather(dayNumber: number) {
     setAiModalState({
       isOpen: true,
       target: "day",
       dayNumber,
-      targetTitle: `Day ${dayNumber} (Weather Optimized)`,
-      currentDay: day,
-      initialInstruction: `Regenerate this entire day to optimize activities and dining spots for the expected weather: ${insight}`,
+      targetTitle: `Day ${dayNumber} (Weather Optimization)`,
+      initialInstruction: "Optimize this day's schedule for rainy/inclement weather.",
     });
   }
 
   async function handleConfirmAIRegenerate(instruction?: string) {
-    const { target, dayNumber, activityIndex, currentActivity, currentDay } = aiModalState;
-
-    const targetDayObj = itinerary.dailyItinerary.find((d) => d.day === dayNumber);
-    const dayWeather = targetDayObj?.weather ?? currentDay?.weather ?? null;
-
-    const response = await fetch("/api/trips/regenerate", {
+    const { target, dayNumber, activityIndex } = aiModalState;
+    const res = await fetch("/api/trips/regenerate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        tripId,
         target,
-        request,
         dayNumber,
-        currentActivity,
-        currentDay,
-        dayWeather,
+        activityIndex,
         instruction,
+        itinerary,
+        request,
       }),
     });
 
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || "Failed to regenerate content.");
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload.error || "Regeneration failed.");
     }
 
-    if (target === "activity" && payload.activity) {
-      const newActivity = payload.activity as Activity;
-      const nextDailyItinerary = itinerary.dailyItinerary.map((day) => {
-        if (day.day !== dayNumber) return day;
-        const nextActivities = [...day.activities];
-        if (activityIndex !== undefined && activityIndex >= 0) {
-          nextActivities[activityIndex] = newActivity;
-        }
-        return { ...day, activities: nextActivities };
-      });
-
-      await saveUpdatedItinerary(
-        { ...itinerary, dailyItinerary: nextDailyItinerary },
-        "Activity regenerated by AI"
-      );
-    } else if (target === "day" && payload.day) {
-      const newDay = payload.day as DailyItinerary;
-      const nextDailyItinerary = itinerary.dailyItinerary.map((day) => {
-        if (day.day !== dayNumber) return day;
-        return newDay;
-      });
-
-      await saveUpdatedItinerary(
-        { ...itinerary, dailyItinerary: nextDailyItinerary },
-        `Day ${dayNumber} regenerated by AI`
-      );
+    const data = await res.json();
+    if (data.itinerary) {
+      updateAndSaveItinerary(data.itinerary, `${target === "activity" ? "Activity" : "Day"} regenerated`);
     }
   }
 
+  // --- Handlers: PDF & Deletion ---
   async function handleDownloadPdf() {
-    if (!trip) return;
     setIsDownloading(true);
     setDownloadError("");
-    try {
-      const pdfPayload: StoredTrip = {
-        ...trip,
-        itinerary,
-      };
 
-      const response = await fetch("/api/trips/pdf", {
+    try {
+      const res = await fetch("/api/trips/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pdfPayload),
+        body: JSON.stringify({ itinerary, request, tripId }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to generate PDF");
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || "PDF generation failed on server.");
       }
 
-      const blob = await response.blob();
+      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const destSlug = itinerary.destination.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "trip";
-      a.download = `roamly-${destSlug}-itinerary.pdf`;
-      document.body.appendChild(a);
-      a.click();
+      const link = document.createElement("a");
+      link.href = url;
+
+      const destinationSlug = itinerary.destination
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "trip";
+
+      link.download = `roamly-${destinationSlug}-itinerary.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("PDF download failed:", err);
-      setDownloadError("Could not generate PDF. Please try again.");
+      console.error("[Roamly PDF Error] Download failed:", err);
+      setDownloadError(err instanceof Error ? err.message : "Failed to download PDF document.");
     } finally {
       setIsDownloading(false);
     }
@@ -460,154 +463,67 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
     if (!tripId) return;
     setIsDeleting(true);
     setDeleteError("");
+
     try {
       const res = await fetch(`/api/trips/${tripId}`, {
         method: "DELETE",
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to delete trip");
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || "Failed to delete trip.");
       }
-
-      sessionStorage.removeItem("roamly-current-itinerary");
-      localStorage.removeItem("roamly-current-itinerary");
-      window.dispatchEvent(new Event("roamly-storage-update"));
 
       router.push("/trips");
       router.refresh();
-    } catch (err: unknown) {
-      console.error("Delete trip failed:", err);
+    } catch (err) {
+      console.error("[Roamly DB Error] Delete trip failed:", err);
       setDeleteError(err instanceof Error ? err.message : "Failed to delete trip.");
       setIsDeleting(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#faf8f5] pb-20 text-[#0f172a] font-sans relative">
-      {/* Toast Feedback Notification Banner */}
+    <main className="min-h-screen bg-[#faf8f5] pb-24 text-[#0f172a] font-sans">
+      <NavigationHeader />
+
+      {/* Toast Notice Banner */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 rounded-2xl bg-[#0f172a] px-5 py-3 text-xs font-bold text-white shadow-2xl transition-all animate-bounce">
-          <Sparkles className="size-4 text-[#f97316]" />
+        <div className="fixed top-20 right-6 z-50 rounded-2xl bg-[#0f172a] px-5 py-3 text-xs font-bold text-white shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in slide-in-from-top-4">
+          <Sparkles className="size-4 text-[#ea580c]" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Activity Editor Modal */}
-      <ActivityEditorModal
-        isOpen={editorState.isOpen}
-        onClose={() => setEditorState((prev) => ({ ...prev, isOpen: false }))}
-        onSave={handleSaveActivityFromModal}
-        initialActivity={editorState.initialActivity}
-        dayNumber={editorState.dayNumber}
-        currency={currency}
-      />
-
-      {/* Move Activity Modal */}
-      {moveModalState && (
-        <MoveActivityModal
-          isOpen={Boolean(moveModalState)}
-          onClose={() => setMoveModalState(null)}
-          onConfirm={handleConfirmMoveModal}
-          activity={moveModalState.activity}
-          currentDayNumber={moveModalState.dayNumber}
-          dailyItinerary={itinerary.dailyItinerary}
-        />
-      )}
-
-      {/* AI Partial Regeneration Modal */}
-      <AIRegenerateModal
-        isOpen={aiModalState.isOpen}
-        onClose={() => setAiModalState((prev) => ({ ...prev, isOpen: false }))}
-        onConfirm={handleConfirmAIRegenerate}
-        target={aiModalState.target}
-        targetTitle={aiModalState.targetTitle}
-        dayNumber={aiModalState.dayNumber}
-        initialInstruction={aiModalState.initialInstruction}
-      />
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
-              <Trash2 className="size-6" />
+      <div className="mx-auto max-w-7xl px-6 pt-10 sm:px-10">
+        {/* Top Header & Actions Bar */}
+        <div className="flex flex-col gap-4 border-b border-[#eae4d9] pb-8 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-[#ea580c]">
+              <Compass className="size-4 text-[#f97316]" />
+              <span>Your Custom Itinerary</span>
             </div>
-            <h3 className="mt-4 text-xl font-bold text-[#0f172a]">Delete this trip?</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              Are you sure you want to delete your trip to <strong className="text-[#0f172a]">{itinerary.destination}</strong>? This action cannot be undone.
+            <h1 className="mt-1 text-4xl font-black tracking-tight text-[#0f172a] sm:text-5xl">
+              {itinerary.destination}
+            </h1>
+            <p className="mt-2 text-sm sm:text-base font-semibold text-slate-600">
+              {request.duration} Days · {request.travelers} {request.travelers === 1 ? "Traveler" : "Travelers"} · {request.style} Style
             </p>
+          </div>
 
-            {deleteError && (
-              <div role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700 border border-rose-200">
-                {deleteError}
-              </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {tripId && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1.5 text-xs font-extrabold text-emerald-800 border border-emerald-200">
+                <span className="size-2 rounded-full bg-emerald-500" />
+                <span>Saved Trip</span>
+              </span>
             )}
 
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <Button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setDeleteError("");
-                }}
-                disabled={isDeleting}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleDeleteTrip}
-                disabled={isDeleting}
-                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl"
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader className="size-4 animate-spin" />
-                    <span>Deleting…</span>
-                  </>
-                ) : (
-                  "Delete Trip"
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Navigation Header */}
-      <NavigationHeader />
-
-      {/* Main Content Container */}
-      <section className="mx-auto max-w-6xl px-6 pt-8 sm:px-10">
-        {downloadError && (
-          <div role="alert" className="mb-6 rounded-2xl bg-rose-50 p-4 text-sm text-rose-700 border border-rose-200 flex items-center justify-between">
-            <span>{downloadError}</span>
-            <button onClick={() => setDownloadError("")} className="font-bold underline text-xs">Dismiss</button>
-          </div>
-        )}
-
-        {/* Action Toolbar */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <Link
-            href="/trips"
-            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors hover:text-[#ea580c]"
-          >
-            ← Back to Saved Trips
-          </Link>
-          <div className="flex items-center gap-3">
-            {canDelete && (
-              <Button
-                onClick={() => setShowDeleteModal(true)}
-                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl"
-              >
-                <Trash2 className="size-4" />
-                <span>Delete Trip</span>
-              </Button>
-            )}
             <Button
               onClick={handleDownloadPdf}
               disabled={isDownloading}
-              className="bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white shadow-md shadow-orange-500/20 text-xs font-extrabold rounded-xl"
+              size="lg"
+              className="bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/20"
             >
               {isDownloading ? (
                 <>
@@ -624,60 +540,15 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
           </div>
         </div>
 
-        {/* Hero Banner / Trip Info */}
-        <div className="card-warm p-6 sm:p-10 bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ffedd5] px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-[#ea580c] border border-[#fed7aa]">
-              <Sparkles className="size-3.5" />
-              {trip.createdAt
-                ? `Saved Trip · ${new Date(trip.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                : "Your Interactive Itinerary Workspace"}
-            </span>
-            {isSaving && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-                <Loader className="size-3.5 animate-spin text-[#ea580c]" />
-                <span>Saving changes…</span>
-              </span>
-            )}
+        {downloadError && (
+          <div role="alert" className="mt-4 rounded-2xl bg-rose-50 p-4 text-xs font-bold text-rose-700 border border-rose-200">
+            {downloadError}
           </div>
+        )}
 
-          <div className="mt-4 flex flex-col justify-between gap-6 border-b border-[#eae4d9] pb-8 md:flex-row md:items-end">
-            <div>
-              <h1 className="text-4xl font-extrabold tracking-tight text-[#0f172a] sm:text-5xl">
-                {itinerary.destination}
-              </h1>
-              <p className="mt-1 text-base text-[#0d9488] font-bold">{itinerary.country}</p>
-
-              {/* Trip Parameters Badges */}
-              <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm font-semibold text-slate-700">
-                <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f2ec] px-3 py-1.5 text-slate-700 border border-[#eae4d9]">
-                  <Calendar className="size-4 text-[#ea580c]" />
-                  {request.duration} Days
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f2ec] px-3 py-1.5 text-slate-700 border border-[#eae4d9]">
-                  <Users className="size-4 text-[#0d9488]" />
-                  {request.travelers} {request.travelers === 1 ? "Traveler" : "Travelers"}
-                </span>
-                {request.style && (
-                  <span className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f2ec] px-3 py-1.5 text-slate-700 border border-[#eae4d9]">
-                    <Tag className="size-4 text-[#f59e0b]" />
-                    {request.style}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Dynamic Budget Breakdown Component */}
-          <div className="mt-6">
-            <BudgetBreakdownCard
-              itinerary={itinerary}
-              currency={currency}
-              travelers={request.travelers || 1}
-            />
-          </div>
-
-          {/* Trip Summary */}
+        {/* Budget Breakdown Summary */}
+        <div className="mt-8">
+          <BudgetBreakdownCard itinerary={itinerary} currency={currency} travelers={request.travelers} />
           {itinerary.summary && (
             <p className="pt-6 text-base sm:text-lg leading-relaxed text-slate-600">
               {itinerary.summary}
@@ -690,172 +561,190 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
           <TripWeatherOutlook dailyItinerary={itinerary.dailyItinerary} />
         </div>
 
-        {/* Main Grid: Days vs Sidebar */}
-        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_20rem]">
-          {/* Day Cards Stack */}
-          <div className="space-y-8">
+        {/* Main Grid: Day Cards (Left) vs Day Checklist & Navigation Sidebar (Right) */}
+        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_22rem]">
+          {/* Left Column: Day Cards Stack */}
+          <div className="space-y-10">
             {itinerary.dailyItinerary.map((day) => {
               const dayInsight = getWeatherDayInsight(day.weather);
               const warnings = getWeatherWarnings(day.weather);
+              const timelineItems = buildDayTimeline(day);
 
               return (
-                <article key={day.day} className="card-warm p-6 sm:p-8 bg-white">
-                  {/* Day Header & Actions */}
-                  <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#eae4d9] pb-5">
-                    <div className="flex-1">
-                      <span className="text-xs font-extrabold tracking-widest text-[#ea580c] uppercase">
-                        DAY {day.day}
-                      </span>
-                      <h2 className="mt-1 text-2xl font-bold tracking-tight text-[#0f172a]">
-                        {day.title}
-                      </h2>
-
-                      {/* Weather Insights & Warnings Box */}
-                      {day.weather && (
-                        <div className="mt-3 space-y-2">
-                          {/* Compact Weather Badge */}
-                          <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl bg-[#faf8f5] px-3.5 py-2 border border-[#eae4d9] shadow-xs">
-                            <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#0f172a]">
-                              <WeatherIcon
-                                weatherCode={day.weather.weatherCode}
-                                condition={day.weather.condition}
-                                className="size-4 text-[#ea580c]"
-                              />
-                              <span>{day.weather.condition}</span>
-                            </div>
-
-                            {day.weather.temperatureMin != null && day.weather.temperatureMax != null && (
-                              <span className="rounded-lg bg-white px-2 py-0.5 text-xs font-black text-[#0f172a] border border-[#eae4d9]">
-                                {day.weather.temperatureMin}° – {day.weather.temperatureMax}°C
-                              </span>
-                            )}
-
-                            {day.weather.precipitationProbability != null && day.weather.precipitationProbability > 0 && (
-                              <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-extrabold text-blue-700 border border-blue-200">
-                                {day.weather.precipitationProbability}% rain
-                              </span>
-                            )}
-
-                            <span
-                              className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${
-                                day.weather.mode === "forecast"
-                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                                  : "bg-amber-100 text-amber-800 border border-amber-300"
-                              }`}
-                            >
-                              {day.weather.mode === "forecast" ? "Forecast" : "Typical Conditions"}
-                            </span>
-                          </div>
-
-                          {/* Weather Insight Sentence & Warning Indicators */}
-                          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
-                            <span className="text-[#0d9488] font-bold">💡 {dayInsight}</span>
-                            {warnings.map((w) => (
-                              <span
-                                key={w.id}
-                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold border ${
-                                  w.severity === "high"
-                                    ? "bg-rose-100 text-rose-800 border-rose-300"
-                                    : w.severity === "medium"
-                                    ? "bg-amber-100 text-amber-800 border-amber-300"
-                                    : "bg-blue-100 text-blue-800 border-blue-300"
-                                }`}
-                              >
-                                <span>{w.icon}</span>
-                                <span>{w.label}</span>
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="shrink-0 rounded-xl bg-[#ffedd5] px-3.5 py-1.5 text-xs font-extrabold text-[#ea580c] border border-[#fed7aa]">
-                        {formatCurrency(day.dailyEstimatedCost, currency)}
-                      </span>
-
-                      {/* Day Action Buttons */}
-                      <Button
-                        onClick={() => handleOpenAddActivity(day.day)}
-                        size="sm"
-                        className="bg-[#f5f2ec] hover:bg-[#eae4d9] text-slate-700 text-xs font-bold rounded-xl border border-[#eae4d9]"
-                      >
-                        <Plus className="size-3.5 text-[#0d9488]" />
-                        <span>Add Activity</span>
-                      </Button>
-
-                      <Button
-                        onClick={() => handleOpenRegenerateDay(day.day, day)}
-                        size="sm"
-                        className="bg-[#ffedd5] hover:bg-[#fed7aa] text-[#ea580c] text-xs font-bold rounded-xl border border-[#fed7aa]"
-                      >
-                        <Sparkles className="size-3.5 text-[#ea580c]" />
-                        <span>Regenerate Day</span>
-                      </Button>
-
-                      {/* Regenerate for Weather */}
-                      {day.weather && (
-                        <Button
-                          onClick={() => handleOpenRegenerateDayForWeather(day.day, day)}
-                          size="sm"
-                          className="bg-teal-50 hover:bg-teal-100 text-[#0d9488] text-xs font-bold rounded-xl border border-teal-200"
-                          title="Regenerate this day optimized for weather"
-                        >
-                          <WeatherIcon weatherCode={day.weather.weatherCode} condition={day.weather.condition} className="size-3.5 text-[#0d9488]" />
-                          <span>Regenerate for Weather</span>
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Daily Carry Checklist Component */}
-                  <DailyCarryChecklist day={day} weather={day.weather} />
-
-                  {/* Nearby Popular Places Component */}
-                  <NearbyPlaces places={day.nearbyPlaces} />
-
-                  {/* Explore / Activities Section with Drag & Drop Dropzone */}
-                  <div className="mt-6 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Compass className="size-4 text-[#ea580c]" />
-                        <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                          Explore Activities ({day.activities.length})
-                        </h3>
+                <article
+                  key={day.day}
+                  id={`day-${day.day}`}
+                  className="card-warm p-6 sm:p-8 bg-white scroll-mt-28"
+                >
+                  {/* Day Header & Action Toolbar */}
+                  <div className="border-b border-[#eae4d9] pb-5 space-y-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <span className="text-xs font-extrabold tracking-widest text-[#ea580c] uppercase">
+                          DAY {day.day}
+                        </span>
+                        <h2 className="mt-0.5 text-2xl font-extrabold tracking-tight text-[#0f172a]">
+                          {day.title}
+                        </h2>
                       </div>
-                    </div>
 
-                    {day.activities.length === 0 ? (
-                      <div
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => handleDropOnEmptyDay(e, day.day)}
-                        className="rounded-2xl border-2 border-dashed border-[#eae4d9] bg-[#faf8f5] p-8 text-center transition-colors hover:border-[#ea580c] hover:bg-[#fff7ed]"
-                      >
-                        <p className="text-xs font-bold text-slate-500">
-                          No activities planned for this day. Drag an activity here or add one below.
-                        </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="shrink-0 rounded-xl bg-[#ffedd5] px-3.5 py-1.5 text-xs font-extrabold text-[#ea580c] border border-[#fed7aa]">
+                          {formatCurrency(day.dailyEstimatedCost, currency)}
+                        </span>
+
                         <Button
                           onClick={() => handleOpenAddActivity(day.day)}
                           size="sm"
-                          className="mt-3 bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs font-bold rounded-xl"
+                          className="bg-[#f5f2ec] hover:bg-[#eae4d9] text-slate-700 text-xs font-bold rounded-xl border border-[#eae4d9]"
                         >
-                          <Plus className="size-3.5" />
+                          <Plus className="size-3.5 text-[#0d9488]" />
                           <span>Add Activity</span>
                         </Button>
+
+                        <Button
+                          onClick={() => handleOpenRegenerateDay(day.day, day)}
+                          size="sm"
+                          className="bg-[#ffedd5] hover:bg-[#fed7aa] text-[#ea580c] text-xs font-bold rounded-xl border border-[#fed7aa]"
+                        >
+                          <Sparkles className="size-3.5 text-[#ea580c]" />
+                          <span>Regenerate Day</span>
+                        </Button>
+
+                        {day.weather && (
+                          <Button
+                            onClick={() => handleOpenRegenerateDayForWeather(day.day)}
+                            size="sm"
+                            className="bg-teal-50 hover:bg-teal-100 text-[#0d9488] text-xs font-bold rounded-xl border border-teal-200"
+                            title="Regenerate this day optimized for weather"
+                          >
+                            <WeatherIcon weatherCode={day.weather.weatherCode} condition={day.weather.condition} className="size-3.5 text-[#0d9488]" />
+                            <span>Regenerate for Weather</span>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Weather Insights & Warnings Box */}
+                    {day.weather && (
+                      <div className="pt-1 space-y-2">
+                        <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl bg-[#faf8f5] px-3.5 py-2 border border-[#eae4d9] shadow-xs">
+                          <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#0f172a]">
+                            <WeatherIcon
+                              weatherCode={day.weather.weatherCode}
+                              condition={day.weather.condition}
+                              className="size-4 text-[#ea580c]"
+                            />
+                            <span>{day.weather.condition}</span>
+                          </div>
+
+                          {day.weather.temperatureMin != null && day.weather.temperatureMax != null && (
+                            <span className="rounded-lg bg-white px-2 py-0.5 text-xs font-black text-[#0f172a] border border-[#eae4d9]">
+                              {day.weather.temperatureMin}° – {day.weather.temperatureMax}°C
+                            </span>
+                          )}
+
+                          {day.weather.precipitationProbability != null && day.weather.precipitationProbability > 0 && (
+                            <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-extrabold text-blue-700 border border-blue-200">
+                              {day.weather.precipitationProbability}% rain
+                            </span>
+                          )}
+
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${
+                              day.weather.mode === "forecast"
+                                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                : "bg-amber-100 text-amber-800 border border-amber-300"
+                            }`}
+                          >
+                            {day.weather.mode === "forecast" ? "Forecast" : "Typical Conditions"}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
+                          <span className="text-[#0d9488] font-bold">💡 {dayInsight}</span>
+                          {warnings.map((w) => (
+                            <span
+                              key={w.id}
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold border ${
+                                w.severity === "high"
+                                  ? "bg-rose-100 text-rose-800 border-rose-300"
+                                  : w.severity === "medium"
+                                  ? "bg-amber-100 text-amber-800 border-amber-300"
+                                  : "bg-blue-100 text-blue-800 border-blue-300"
+                              }`}
+                            >
+                              <span>{w.icon}</span>
+                              <span>{w.label}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Interleaved Chronological Timeline Section */}
+                  <div className="mt-6 space-y-4">
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+                      Day Schedule & Timeline
+                    </h3>
+
+                    {timelineItems.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-[#eae4d9] p-6 text-center text-slate-500 text-sm">
+                        No activities scheduled for this day yet. Click &quot;Add Activity&quot; above to add one.
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {day.activities.map((activity, idx) => {
+                        {timelineItems.map((item) => {
+                          if (item.isMeal) {
+                            const restaurant = item.meal;
+                            return (
+                              <div
+                                key={`${day.day}-meal-${item.mealIndex}`}
+                                className="rounded-2xl border border-[#fde68a] bg-[#fffbeb] p-4 sm:p-5 shadow-xs transition-all hover:bg-amber-50/70"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                    <div className="grid size-9 place-items-center rounded-xl bg-amber-100 text-[#d97706] shrink-0 border border-amber-200">
+                                      <Utensils className="size-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#d97706] bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
+                                          {restaurant.meal || "Meal"}
+                                        </span>
+                                        <h4 className="text-base font-extrabold text-[#0f172a] truncate">
+                                          {restaurant.name}
+                                        </h4>
+                                      </div>
+                                      <p className="mt-0.5 text-xs font-semibold text-slate-600">
+                                        {restaurant.cuisine} Cuisine
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <span className="text-sm font-extrabold text-[#d97706] shrink-0">
+                                    {formatCurrency(restaurant.estimatedCost, currency)}
+                                  </span>
+                                </div>
+
+                                <div className="mt-2.5 flex items-center gap-1 text-xs text-slate-500 font-semibold pl-11">
+                                  <MapPin className="size-3.5 text-slate-400" />
+                                  <span>{restaurant.location}</span>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Activity timeline item
+                          const { activity, activityIndex: idx } = item;
                           const isDropTarget = dropTarget?.dayNumber === day.day && dropTarget?.activityIndex === idx;
                           const isBeingDragged = draggedItem?.dayNumber === day.day && draggedItem?.activityIndex === idx;
-
-                          // Deterministic activity weather attribution
                           const activityWeatherContext = getWeatherActivityContext(activity, day.weather);
 
                           return (
                             <div
-                              key={`${day.day}-${activity.name}-${idx}`}
+                              key={`${day.day}-act-${idx}`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, day.day, idx)}
                               onDragOver={(e) => handleDragOver(e, day.day, idx)}
@@ -865,10 +754,9 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                 isBeingDragged ? "opacity-40 border-dashed scale-98" : "hover:bg-white hover:shadow-md"
                               } ${isDropTarget ? "border-t-4 border-t-[#ea580c] ring-2 ring-[#ffedd5] bg-[#fff7ed]" : ""}`}
                             >
-                              {/* Card Header & Drag Handle + Controls */}
+                              {/* Drag Handle & Controls */}
                               <div className="flex flex-wrap items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 flex-1">
-                                  {/* Drag Handle */}
                                   <div
                                     className="cursor-grab active:cursor-grabbing p-1 rounded-lg text-slate-400 hover:text-[#ea580c] hover:bg-slate-200 transition-colors"
                                     title="Drag to reorder or move to another day"
@@ -879,7 +767,6 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                   <div className="flex-1 min-w-0">
                                     <h4 className="text-base font-bold text-[#0f172a] break-words">{activity.name}</h4>
 
-                                    {/* Deterministic "Why this activity?" Weather Attribution Tag */}
                                     {activityWeatherContext && (
                                       <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#f0fdf4] px-2.5 py-0.5 text-[11px] font-extrabold text-[#166534] border border-[#bbf7d0]">
                                         {activityWeatherContext}
@@ -888,13 +775,11 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                   </div>
                                 </div>
 
-                                {/* Controls toolbar */}
                                 <div className="flex items-center gap-1 flex-wrap">
                                   <span className="text-sm font-extrabold text-[#ea580c] mr-2">
                                     {formatCurrency(activity.estimatedCost, currency)}
                                   </span>
 
-                                  {/* Move Up / Move Down Touch buttons */}
                                   <button
                                     type="button"
                                     disabled={idx === 0}
@@ -915,24 +800,15 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                     <ChevronDown className="size-3.5" />
                                   </button>
 
-                                  {/* Move to Day Modal Button */}
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      setMoveModalState({
-                                        isOpen: true,
-                                        dayNumber: day.day,
-                                        activityIndex: idx,
-                                        activity,
-                                      })
-                                    }
-                                    title="Move to another Day..."
-                                    className="rounded-lg p-1 text-[#0d9488] hover:bg-teal-50 transition-colors"
+                                    onClick={() => handleOpenMoveModal(day.day, idx, activity)}
+                                    title="Move to another day"
+                                    className="rounded-lg p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                                   >
                                     <ArrowUpDown className="size-3.5" />
                                   </button>
 
-                                  {/* Edit Activity */}
                                   <button
                                     type="button"
                                     onClick={() => handleOpenEditActivity(day.day, idx, activity)}
@@ -942,7 +818,6 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                     Edit
                                   </button>
 
-                                  {/* Standard Regenerate Activity */}
                                   <button
                                     type="button"
                                     onClick={() => handleOpenRegenerateActivity(day.day, idx, activity)}
@@ -953,7 +828,6 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                     <Sparkles className="size-3.5" />
                                   </button>
 
-                                  {/* Regenerate for Weather Activity */}
                                   {day.weather && (
                                     <button
                                       type="button"
@@ -966,7 +840,6 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                     </button>
                                   )}
 
-                                  {/* Delete Activity */}
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteActivity(day.day, idx)}
@@ -978,7 +851,6 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                 </div>
                               </div>
 
-                              {/* Meta Info */}
                               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-slate-500 pl-6">
                                 <span className="inline-flex items-center gap-1">
                                   <Clock className="size-3.5 text-slate-400" />
@@ -1000,210 +872,142 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                     )}
                   </div>
 
-                  {/* Eat Well / Dining Section */}
-                  {day.restaurants && day.restaurants.length > 0 && (
-                    <div className="mt-8 rounded-2xl border border-[#fef3c7] bg-[#fffbeb] p-5 sm:p-6">
-                      <div className="flex items-center gap-2">
-                        <Utensils className="size-4 text-[#d97706]" />
-                        <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#d97706]">
-                          Dining & Local Flavors
-                        </h3>
-                      </div>
-
-                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        {day.restaurants.map((restaurant, idx) => (
-                          <div
-                            key={`${day.day}-${restaurant.name}-${idx}`}
-                            className="rounded-xl bg-white p-4 border border-[#fde68a] shadow-xs"
-                          >
-                            <div className="flex items-baseline justify-between gap-2">
-                              <h4 className="font-bold text-[#0f172a] text-sm">
-                                {restaurant.name}
-                              </h4>
-                              <span className="shrink-0 text-xs font-bold text-[#d97706]">
-                                {formatCurrency(restaurant.estimatedCost, currency)}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-xs font-semibold text-slate-600">
-                              {restaurant.meal} · {restaurant.cuisine}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500 inline-flex items-center gap-1">
-                              <MapPin className="size-3 text-slate-400" />
-                              {restaurant.location}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* Useful Nearby Recommendations — Positioned AFTER the complete day's timeline */}
+                  <div className="mt-8 pt-6 border-t border-[#eae4d9]">
+                    <NearbyPlaces places={day.nearbyPlaces} />
+                  </div>
                 </article>
               );
             })}
           </div>
 
-          {/* Sidebar */}
-          <aside className="space-y-6">
-            <div className="rounded-3xl border border-[#ccfbf1] bg-[#f0fdf4] p-6 sm:p-8 lg:sticky lg:top-24">
-              <h2 className="text-lg font-bold text-[#0f172a] flex items-center gap-2">
-                <Sparkles className="size-5 text-[#0d9488]" />
-                Useful travel tips
-              </h2>
-
-              <ul className="mt-5 space-y-4">
-                {itinerary.travelTips.map((tip, idx) => (
-                  <li key={idx} className="flex gap-3 text-sm leading-relaxed text-slate-700">
-                    <span className="mt-1.5 size-2 shrink-0 rounded-full bg-[#0d9488]" />
-                    <span>{tip}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-6 space-y-3 border-t border-[#99f6e4] pt-5">
-                <Button
-                  onClick={handleDownloadPdf}
-                  disabled={isDownloading}
-                  className="w-full bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white py-3 shadow-md shadow-orange-500/20 text-xs font-extrabold rounded-xl"
-                >
-                  {isDownloading ? (
-                    <>
-                      <Loader className="size-4 animate-spin" />
-                      <span>Generating PDF…</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="size-4" />
-                      <span>Download PDF Document</span>
-                    </>
-                  )}
-                </Button>
-
-                {canDelete && (
-                  <Button
-                    onClick={() => setShowDeleteModal(true)}
-                    className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 py-3 text-xs font-bold rounded-xl"
-                  >
-                    <Trash2 className="size-4" />
-                    <span>Delete Trip</span>
-                  </Button>
-                )}
-              </div>
-
-              <p className="mt-4 text-xs leading-normal text-slate-500">
-                All prices are conservative estimates. Availability, opening hours, and reservations are subject to local providers.
-              </p>
-            </div>
-          </aside>
+          {/* Right Column: Day Navigation & Day-Specific Checklist Sidebar */}
+          <DayChecklistSidebar
+            dailyItinerary={itinerary.dailyItinerary}
+            activeDayNumber={activeDayNumber}
+            onSelectDay={handleSelectDay}
+            onDownloadPdf={handleDownloadPdf}
+            isDownloading={isDownloading}
+            canDelete={canDelete}
+            onDeleteTrip={canDelete ? handleDeleteTrip : undefined}
+          />
         </div>
+      </div>
 
-        {/* Footer Actions */}
-        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[#eae4d9] pt-8">
-          <Button asChild size="lg" className="bg-[#0d9488] hover:bg-[#0f766e] text-white font-bold rounded-2xl">
-            <Link href="/plan">Plan another trip</Link>
-          </Button>
+      {/* Editor Modal */}
+      <ActivityEditorModal
+        isOpen={editorState.isOpen}
+        onClose={() => setEditorState({ isOpen: false, dayNumber: 1 })}
+        onSave={handleSaveActivity}
+        dayNumber={editorState.dayNumber}
+        initialActivity={editorState.initialActivity}
+        currency={currency}
+      />
 
-          <div className="flex items-center gap-3">
-            {canDelete && (
-              <Button
-                onClick={() => setShowDeleteModal(true)}
-                size="lg"
-                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-2xl"
-              >
-                <Trash2 className="size-4" />
-                <span>Delete Trip</span>
-              </Button>
+      {/* Move Activity Modal */}
+      {moveModalState && (
+        <MoveActivityModal
+          isOpen={moveModalState.isOpen}
+          onClose={() => setMoveModalState(null)}
+          onConfirm={handleConfirmMoveActivity}
+          activity={moveModalState.activity}
+          currentDayNumber={moveModalState.dayNumber}
+          dailyItinerary={itinerary.dailyItinerary}
+        />
+      )}
+
+      {/* AI Partial Regeneration Modal */}
+      <AIRegenerateModal
+        isOpen={aiModalState.isOpen}
+        onClose={() => setAiModalState((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmAIRegenerate}
+        target={aiModalState.target}
+        dayNumber={aiModalState.dayNumber}
+        targetTitle={aiModalState.targetTitle}
+        initialInstruction={aiModalState.initialInstruction}
+      />
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+              <Trash2 className="size-6" />
+            </div>
+            <h3 className="mt-4 text-xl font-bold text-[#0f172a]">Delete this trip?</h3>
+            <p className="mt-2 text-sm text-slate-[#0f172a]">
+              Are you sure you want to delete your trip to <strong className="text-[#0f172a]">{itinerary.destination}</strong>? This action cannot be undone.
+            </p>
+
+            {deleteError && (
+              <div role="alert" className="mt-3 text-xs font-semibold text-rose-600">
+                {deleteError}
+              </div>
             )}
-            <Button
-              onClick={handleDownloadPdf}
-              disabled={isDownloading}
-              size="lg"
-              className="bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/20"
-            >
-              {isDownloading ? (
-                <>
-                  <Loader className="size-4 animate-spin" />
-                  <span>Generating PDF…</span>
-                </>
-              ) : (
-                <>
-                  <Download className="size-4" />
-                  <span>Download PDF</span>
-                </>
-              )}
-            </Button>
+
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-[#eae4d9] pt-4">
+              <Button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleDeleteTrip}
+                disabled={isDeleting}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold rounded-xl shadow-md"
+              >
+                {isDeleting ? "Deleting…" : "Delete Trip"}
+              </Button>
+            </div>
           </div>
         </div>
-      </section>
+      )}
     </main>
   );
 }
 
-let cachedRawTrip: string | null = null;
-let cachedParsedTrip: StoredTrip | null = null;
+function EmptyResults() {
+  return (
+    <div className="min-h-screen bg-[#faf8f5] pb-20 text-[#0f172a] font-sans flex flex-col justify-between">
+      <NavigationHeader />
+      <div className="mx-auto max-w-md px-6 py-16 text-center">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-[#ffedd5] text-[#ea580c]">
+          <Compass className="size-7" />
+        </div>
+        <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-[#0f172a]">No itinerary found</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          You haven&apos;t generated a travel plan yet or your session expired.
+        </p>
+        <Button
+          asChild
+          size="lg"
+          className="mt-6 bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white font-extrabold rounded-2xl shadow-md"
+        >
+          <Link href="/plan">Plan a trip</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function subscribe(callback: () => void) {
-  if (typeof window === "undefined") return () => {};
   window.addEventListener("storage", callback);
-  window.addEventListener("roamly-storage-update", callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener("roamly-storage-update", callback);
-  };
+  return () => window.removeEventListener("storage", callback);
 }
 
 function readStoredTrip(): StoredTrip | null {
-  if (typeof window === "undefined") return null;
-
   try {
-    const rawTrip =
-      sessionStorage.getItem("roamly-current-itinerary") ??
-      localStorage.getItem("roamly-current-itinerary");
-
-    if (!rawTrip) {
-      cachedRawTrip = null;
-      cachedParsedTrip = null;
-      return null;
-    }
-
-    if (rawTrip === cachedRawTrip) {
-      return cachedParsedTrip;
-    }
-
-    cachedRawTrip = rawTrip;
-    cachedParsedTrip = JSON.parse(rawTrip) as StoredTrip;
-    return cachedParsedTrip;
+    const raw = localStorage.getItem("roamly_trip");
+    return raw ? (JSON.parse(raw) as StoredTrip) : null;
   } catch {
-    sessionStorage.removeItem("roamly-current-itinerary");
-    localStorage.removeItem("roamly-current-itinerary");
-    cachedRawTrip = null;
-    cachedParsedTrip = null;
     return null;
   }
 }
 
 function getServerSnapshot(): StoredTrip | null {
   return null;
-}
-
-function EmptyResults() {
-  return (
-    <main className="grid min-h-screen place-items-center bg-[#faf8f5] px-6">
-      <div className="max-w-md rounded-3xl border border-[#eae4d9] bg-white p-8 text-center shadow-lg">
-        <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-[#ffedd5] text-[#ea580c]">
-          <Compass className="size-7" />
-        </div>
-        <p className="mt-4 text-xs font-bold uppercase tracking-widest text-[#ea580c]">
-          No itinerary found
-        </p>
-        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-[#0f172a]">
-          Start planning your trip.
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-slate-600">
-          Create a personalized itinerary first, then you’ll see the full travel plan here.
-        </p>
-        <Button asChild size="lg" className="mt-6 bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white font-extrabold rounded-2xl shadow-md">
-          <Link href="/plan">Plan a trip</Link>
-        </Button>
-      </div>
-    </main>
-  );
 }

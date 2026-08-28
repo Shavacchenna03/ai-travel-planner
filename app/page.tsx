@@ -39,7 +39,7 @@ const featuredDestinations = [
   {
     name: "Kashmir",
     tagline: "Shikaras & Snow-Capped Hills",
-    image: "https://images.unsplash.com/photo-1566837945700-30057527ade0?q=80&w=800&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1598091383021-15ddea10925d?q=80&w=800&auto=format&fit=crop",
     badge: "Scenic",
   },
   {
@@ -142,7 +142,7 @@ export default function Home() {
               <div className="lg:col-span-5 relative">
                 <div className="relative mx-auto max-w-md lg:max-w-none">
                   {/* Hero Destination Card */}
-                  <div className="relative overflow-hidden rounded-3xl border border-[#eae4d9] bg-white p-3 shadow-2xl shadow-orange-500/10">
+                  <div className="relative overflow-hidden rounded-3xl border border-[#eae4d9] bg-white p-3 pb-5 shadow-2xl shadow-orange-500/10">
                     <div className="relative h-72 sm:h-80 w-full overflow-hidden rounded-2xl">
                       <Image
                         src="https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?q=80&w=1000&auto=format&fit=crop"
@@ -165,8 +165,8 @@ export default function Home() {
                     </div>
 
                     {/* Card Content Snippet */}
-                    <div className="p-4 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500">
+                    <div className="px-4 pt-3 pb-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500 sm:justify-end">
                         <span className="flex items-center gap-1">
                           <Calendar className="size-3.5 text-[#f97316]" /> 4 Days
                         </span>
@@ -181,7 +181,7 @@ export default function Home() {
                   </div>
 
                   {/* Floating Snippet Badge 1 */}
-                  <div className="absolute -bottom-5 -left-4 z-20 hidden sm:flex items-center gap-3 rounded-2xl border border-[#eae4d9] bg-white p-3.5 shadow-xl">
+                  <div className="absolute -bottom-4 -left-4 z-20 hidden sm:flex items-center gap-3 rounded-2xl border border-[#eae4d9] bg-white p-3.5 shadow-xl">
                     <div className="grid size-10 place-items-center rounded-xl bg-[#ffedd5] text-[#ea580c]">
                       <Compass className="size-5" />
                     </div>

@@ -1,7 +1,21 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { Compass } from "@/components/icons";
 
 export function Footer() {
+  const [copied, setCopied] = useState(false);
+
+  function handleEmailClick() {
+    navigator.clipboard.writeText("shavacchenna@gmail.com").then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    }).catch(() => {
+      // Ignore clipboard write errors
+    });
+  }
+
   return (
     <footer className="border-t border-[#eae4d9] bg-[#f5f2ec] text-[#0f172a]">
       <div className="mx-auto max-w-7xl px-6 py-10 sm:px-10 lg:px-12">
@@ -49,9 +63,11 @@ export function Footer() {
             <p className="font-extrabold text-slate-800 text-xs">Shavac Chenna</p>
             <a
               href="mailto:shavacchenna@gmail.com"
+              onClick={handleEmailClick}
               className="text-[#0d9488] hover:text-[#0f766e] font-semibold transition-colors underline block mt-0.5"
+              title="Click to send email or copy address"
             >
-              shavacchenna@gmail.com
+              {copied ? "Copied: shavacchenna@gmail.com" : "shavacchenna@gmail.com"}
             </a>
           </div>
         </div>

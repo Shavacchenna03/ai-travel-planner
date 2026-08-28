@@ -7,12 +7,13 @@ import type { Itinerary } from "@/lib/trip-schema";
 
 type BudgetBreakdownCardProps = {
   itinerary: Itinerary;
-  currency: string;
-  travelers: number;
+  currency?: string;
+  travelers?: number;
 };
 
-export function BudgetBreakdownCard({ itinerary, currency, travelers }: BudgetBreakdownCardProps) {
+export function BudgetBreakdownCard({ itinerary, currency, travelers = 1 }: BudgetBreakdownCardProps) {
   const breakdown = calculateBudgetBreakdown(itinerary);
+  const activeCurrency = currency || itinerary?.currency || "INR";
 
   return (
     <div className="w-full card-warm p-6 sm:p-8 bg-white shadow-lg border border-[#eae4d9]">
@@ -27,7 +28,7 @@ export function BudgetBreakdownCard({ itinerary, currency, travelers }: BudgetBr
         </div>
         <div className="text-right">
           <p className="text-2xl font-black tracking-tight text-[#ea580c] sm:text-3xl">
-            {formatCurrency(breakdown.total, currency)}
+            {formatCurrency(breakdown.total, activeCurrency)}
           </p>
           <p className="text-xs font-semibold text-slate-500">
             For all {travelers} traveler{travelers === 1 ? "" : "s"}
@@ -77,7 +78,7 @@ export function BudgetBreakdownCard({ itinerary, currency, travelers }: BudgetBr
             Activities & Sights
           </p>
           <p className="mt-0.5 text-lg font-black text-[#0f172a]">
-            {formatCurrency(breakdown.activities, currency)}
+            {formatCurrency(breakdown.activities, activeCurrency)}
           </p>
         </div>
 
@@ -95,7 +96,7 @@ export function BudgetBreakdownCard({ itinerary, currency, travelers }: BudgetBr
             Dining & Flavors
           </p>
           <p className="mt-0.5 text-lg font-black text-[#0f172a]">
-            {formatCurrency(breakdown.food, currency)}
+            {formatCurrency(breakdown.food, activeCurrency)}
           </p>
         </div>
 
@@ -113,7 +114,7 @@ export function BudgetBreakdownCard({ itinerary, currency, travelers }: BudgetBr
             Accommodation
           </p>
           <p className="mt-0.5 text-lg font-black text-[#0f172a]">
-            {formatCurrency(breakdown.accommodation, currency)}
+            {formatCurrency(breakdown.accommodation, activeCurrency)}
           </p>
         </div>
 
@@ -131,7 +132,7 @@ export function BudgetBreakdownCard({ itinerary, currency, travelers }: BudgetBr
             Transport & Transit
           </p>
           <p className="mt-0.5 text-lg font-black text-[#0f172a]">
-            {formatCurrency(breakdown.transport, currency)}
+            {formatCurrency(breakdown.transport, activeCurrency)}
           </p>
         </div>
       </div>
