@@ -215,6 +215,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
           const parsed = JSON.parse(raw);
           parsed.itinerary = updated;
           localStorage.setItem("roamly_trip", JSON.stringify(parsed));
+          window.dispatchEvent(new Event("roamly-storage-update"));
         }
       } catch {
         // Ignore localStorage error
@@ -1012,16 +1013,37 @@ function subscribe(callback: () => void) {
   };
 }
 
+let cachedRawString: string | null | undefined = undefined;
+let cachedStoredTrip: StoredTrip | null = null;
+
 function readStoredTrip(): StoredTrip | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
   try {
     const raw = localStorage.getItem("roamly_trip");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || !parsed.itinerary || !Array.isArray(parsed.itinerary.dailyItinerary)) {
+    if (raw === cachedRawString) {
+      return cachedStoredTrip;
+    }
+
+    cachedRawString = raw;
+
+    if (!raw) {
+      cachedStoredTrip = null;
       return null;
     }
-    return parsed as StoredTrip;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !parsed.itinerary || !Array.isArray(parsed.itinerary.dailyItinerary)) {
+      cachedStoredTrip = null;
+      return null;
+    }
+
+    cachedStoredTrip = parsed as StoredTrip;
+    return cachedStoredTrip;
   } catch {
+    cachedStoredTrip = null;
     return null;
   }
 }
