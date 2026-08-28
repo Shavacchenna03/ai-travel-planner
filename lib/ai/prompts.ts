@@ -55,7 +55,7 @@ IMPORTANT AI WEATHER INSTRUCTIONS:
 - Preserve the user's requested destination, budget, duration (${duration} days), travelers, and preferences.`;
   }
 
-  return `You are Roamly's experienced travel planner. Create a practical, enjoyable day-by-day itinerary using ONLY the following JSON structure:
+  return `You are Roamly's experienced travel planner. Create a practical, highly detailed, enjoyable day-by-day itinerary using ONLY the following JSON structure:
 
 {
   "destination": "string",
@@ -95,12 +95,12 @@ IMPORTANT AI WEATHER INSTRUCTIONS:
   ]
 }
 
-CRITICAL DURATION REQUIREMENT:
+CRITICAL DURATION & COMPLETENESS RULES:
 - The user requested a trip duration of EXACTLY ${duration} day(s) (${dayListStr}).
 - You MUST generate EXACTLY ${duration} day objects inside the "dailyItinerary" array.
 - "dailyItinerary.length" MUST equal ${duration}.
-- Do NOT stop at 2, 3, 5, or 6 days. You MUST include all days up to Day ${duration}.
-- Ensure the days are numbered sequentially from day: 1 up to day: ${duration} (${dayListStr}).
+- You have a generous completion output token budget (4096 tokens). NEVER stop early, never omit days, never combine days, and never summarize later days.
+- Include Day 1, Day 2, up through Day ${duration} sequentially without skipping any numbers.
 - The trip plan is INVALID if dailyItinerary.length !== ${duration}.${weatherSection}
 
 Rules:
@@ -109,7 +109,7 @@ Rules:
 - Ensure each day (from Day 1 to Day ${duration}) is achievable: usually 2–4 nearby activities with time for travel, meals, and rest.
 - Ensure dailyEstimatedCost is the sum of activity and restaurant estimated costs for that day.
 - Ensure travelTips is an array of helpful travel advice strings.
-- Output MUST be strict valid JSON matching the specified schema. Do not output Markdown, HTML, commentary, or wrapper objects outside the specified JSON schema.`;
+- Output MUST be strict valid JSON matching the specified schema. Do not output Markdown prose, HTML, commentary, or wrapper objects outside the specified JSON schema.`;
 }
 
 export const travelPlannerSystemPrompt = buildTravelPlannerSystemPrompt(3);
@@ -132,7 +132,8 @@ export function buildUserPrompt(input: TripRequest, weatherData?: NormalizedWeat
 - Food Preference: ${input.food}${weatherSummaryStr}
 
 CRITICAL STRUCTURAL CHECK:
-"dailyItinerary" array MUST contain EXACTLY ${input.duration} elements: ${dayListStr}.`;
+"dailyItinerary" array MUST contain EXACTLY ${input.duration} elements (${dayListStr}).
+Currency MUST be set to "${input.currency}".`;
 }
 
 export const regenerateActivitySystemPrompt = `You are Roamly's experienced travel planner. Your task is to generate ONE single replacement activity for a trip.

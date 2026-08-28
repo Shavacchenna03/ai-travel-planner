@@ -128,8 +128,8 @@ export function TripPlanningForm() {
         return;
       }
 
-      sessionStorage.setItem(
-        "roamly-current-itinerary",
+      localStorage.setItem(
+        "roamly_trip",
         JSON.stringify({ tripId: payload.tripId, itinerary: payload.itinerary, request: requestBody })
       );
       window.dispatchEvent(new Event("roamly-storage-update"));

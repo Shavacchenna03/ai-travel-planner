@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       destination: parsedInput.data.destination,
       startDate: parsedInput.data.startDate,
       duration: parsedInput.data.duration,
+      currency: parsedInput.data.currency,
     });
     console.log(
       `[Roamly Weather] Destination: ${parsedInput.data.destination} | Mode: ${weatherData.mode} | Days: ${weatherData.days.length} | Confidence: ${weatherData.confidence}`

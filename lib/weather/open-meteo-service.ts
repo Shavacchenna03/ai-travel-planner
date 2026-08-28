@@ -1,6 +1,27 @@
 import { getWeatherConditionFromCode } from "./wmo-codes";
 import type { GetWeatherParams, NormalizedWeatherData, DailyWeatherData } from "./types";
 
+type GeocodeResultItem = {
+  id?: number;
+  name?: string;
+  latitude: number;
+  longitude: number;
+  country?: string;
+  country_code?: string;
+  timezone?: string;
+  population?: number;
+  feature_code?: string;
+  admin1?: string;
+};
+
+const currencyToCountry: Record<string, { code: string; name: string }> = {
+  INR: { code: "IN", name: "India" },
+  USD: { code: "US", name: "United States" },
+  EUR: { code: "FR", name: "France" },
+  GBP: { code: "GB", name: "United Kingdom" },
+  JPY: { code: "JP", name: "Japan" },
+};
+
 function formatDateYYYYMMDD(date: Date): string {
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -19,27 +40,91 @@ function parseTimeOnlyISO(isoString: string | null | undefined): string | null {
   }
 }
 
-export async function geocodeDestination(destination: string): Promise<{ latitude: number; longitude: number } | null> {
+function selectBestGeocodeCandidate(candidates: GeocodeResultItem[], query: string, targetCountryCode?: string): GeocodeResultItem | null {
+  if (!candidates || candidates.length === 0) return null;
+  const valid = candidates.filter((c) => typeof c.latitude === "number" && typeof c.longitude === "number");
+  if (valid.length === 0) return null;
+
+  const queryLower = query.toLowerCase();
+
+  // Rule A: Explicit country name match in query string (e.g. "Paris, France", "Goa, India")
+  for (const c of valid) {
+    if (c.country && queryLower.includes(c.country.toLowerCase())) {
+      return c;
+    }
+  }
+
+  // Rule B: Match target country code based on trip currency context (e.g. INR -> IN, USD -> US)
+  if (targetCountryCode) {
+    const countryMatches = valid.filter((c) => c.country_code && c.country_code.toUpperCase() === targetCountryCode.toUpperCase());
+    if (countryMatches.length > 0) {
+      // Prioritize larger populations / primary cities
+      countryMatches.sort((a, b) => (b.population || 0) - (a.population || 0));
+      return countryMatches[0];
+    }
+  }
+
+  // Rule C: Fallback to largest population result
+  valid.sort((a, b) => (b.population || 0) - (a.population || 0));
+  return valid[0];
+}
+
+async function resolveDestinationLocation(destination: string, currency?: string): Promise<GeocodeResultItem | null> {
   if (!destination || typeof destination !== "string" || destination.trim().length < 2) {
     return null;
   }
-  try {
-    const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(destination.trim())}&count=1&language=en&format=json`;
-    const res = await fetch(geocodeUrl);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const loc = data.results?.[0];
-    if (loc && typeof loc.latitude === "number" && typeof loc.longitude === "number") {
-      return { latitude: loc.latitude, longitude: loc.longitude };
+
+  const clean = destination.trim();
+  const currencyInfo = currency ? currencyToCountry[currency.toUpperCase()] : undefined;
+
+  console.log(`[Roamly Geocoder Debug] Resolving destination: "${clean}" | Currency Context: "${currency || "Default"}"`);
+
+  // Special State Disambiguation: "Goa" in India (State capital / region resolution)
+  if (clean.toLowerCase() === "goa" && (currency === "INR" || !currency)) {
+    const goaPanjimUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent("Panjim, Goa, India")}&count=5&language=en&format=json`;
+    const pRes = await fetch(goaPanjimUrl).catch(() => null);
+    if (pRes && pRes.ok) {
+      const pData = await pRes.json();
+      if (pData.results?.[0]) {
+        const panjim = pData.results[0] as GeocodeResultItem;
+        panjim.name = "Goa";
+        console.log(`[Roamly Geocoder Debug] Goa Disambiguation Match: "${panjim.name}, ${panjim.country}" (Lat: ${panjim.latitude}, Lon: ${panjim.longitude})`);
+        return panjim;
+      }
     }
-    return null;
-  } catch {
-    return null;
   }
+
+  // 1. Primary Open-Meteo Geocoding Search
+  const mainUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(clean)}&count=20&language=en&format=json`;
+  const res = await fetch(mainUrl).catch(() => null);
+  const data = res && res.ok ? await res.json() : {};
+  const candidates: GeocodeResultItem[] = data.results || [];
+
+  let best = selectBestGeocodeCandidate(candidates, clean, currencyInfo?.code);
+
+  // 2. Fallback: If currency context exists and candidate is outside target country, retry with explicit country context
+  if ((!best || (currencyInfo && best.country_code !== currencyInfo.code)) && !clean.includes(",")) {
+    const fallbackQuery = `${clean}, ${currencyInfo ? currencyInfo.name : "India"}`;
+    const fallbackUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(fallbackQuery)}&count=10&language=en&format=json`;
+    const fRes = await fetch(fallbackUrl).catch(() => null);
+    if (fRes && fRes.ok) {
+      const fData = await fRes.json();
+      const fCandidates: GeocodeResultItem[] = fData.results || [];
+      const fBest = selectBestGeocodeCandidate(fCandidates, fallbackQuery, currencyInfo?.code);
+      if (fBest) best = fBest;
+    }
+  }
+
+  return best;
+}
+
+export async function geocodeDestination(destination: string, currency?: string): Promise<{ latitude: number; longitude: number } | null> {
+  const result = await resolveDestinationLocation(destination, currency);
+  return result ? { latitude: result.latitude, longitude: result.longitude } : null;
 }
 
 export async function getWeatherDataForTrip(params: GetWeatherParams): Promise<NormalizedWeatherData> {
-  const { destination, startDate, duration } = params;
+  const { destination, startDate, duration, currency } = params;
   const fetchedAt = new Date().toISOString();
 
   if (!destination || typeof destination !== "string" || destination.trim().length < 2) {
@@ -72,26 +157,8 @@ export async function getWeatherDataForTrip(params: GetWeatherParams): Promise<N
   const endDateObj = new Date(startDateObj.getTime() + (validDuration - 1) * 86400000);
 
   try {
-    // 1. Resolve Destination to Coordinates via Open-Meteo Geocoding API
-    const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cleanDestination)}&count=1&language=en&format=json`;
-    console.log(`[Roamly Weather Debug] Geocoding destination: "${cleanDestination}"`);
-
-    const geoController = new AbortController();
-    const geoTimeout = setTimeout(() => geoController.abort(), 5000);
-
-    const geoRes = await fetch(geocodeUrl, { signal: geoController.signal }).catch((err) => {
-      clearTimeout(geoTimeout);
-      throw err;
-    });
-    clearTimeout(geoTimeout);
-
-    if (!geoRes.ok) {
-      console.warn(`[Roamly Weather Debug] Geocoding API returned status ${geoRes.status}`);
-      throw new Error(`Geocoding HTTP error ${geoRes.status}`);
-    }
-
-    const geoData = await geoRes.json();
-    const locationResult = geoData.results?.[0];
+    // 1. Resolve Destination to Coordinates via Disambiguated Geocoding
+    const locationResult = await resolveDestinationLocation(cleanDestination, currency);
 
     if (!locationResult || typeof locationResult.latitude !== "number" || typeof locationResult.longitude !== "number") {
       console.warn(`[Roamly Weather Debug] Destination "${cleanDestination}" not found via Geocoding API.`);
@@ -115,7 +182,9 @@ export async function getWeatherDataForTrip(params: GetWeatherParams): Promise<N
       ? `${locationResult.name}${locationResult.country ? `, ${locationResult.country}` : ""}`
       : cleanDestination;
 
-    console.log(`[Roamly Weather Debug] Resolved "${cleanDestination}" to Lat: ${latitude}, Lon: ${longitude}, Timezone: ${timezone}`);
+    console.log(
+      `[Roamly Weather Debug] Geocoding Result: Original Destination: "${cleanDestination}" | Query Context Currency: "${currency || "INR"}" | Resolved Display Name: "${displayName}" | Country: ${locationResult.country || "Unknown"} (${locationResult.country_code || "N/A"}) | Coordinates: Lat ${latitude}, Lon ${longitude} | Timezone: ${timezone}`
+    );
 
     // Calculate start date offset from today (in days)
     const today = new Date();

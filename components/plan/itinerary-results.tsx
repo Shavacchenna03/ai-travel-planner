@@ -996,7 +996,11 @@ function EmptyResults() {
 
 function subscribe(callback: () => void) {
   window.addEventListener("storage", callback);
-  return () => window.removeEventListener("storage", callback);
+  window.addEventListener("roamly-storage-update", callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener("roamly-storage-update", callback);
+  };
 }
 
 function readStoredTrip(): StoredTrip | null {

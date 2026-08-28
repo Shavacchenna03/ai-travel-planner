@@ -30,4 +30,5 @@ export type GetWeatherParams = {
   destination: string;
   startDate?: string | Date;
   duration: number;
+  currency?: string;
 };
