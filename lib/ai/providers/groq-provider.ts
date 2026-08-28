@@ -21,7 +21,7 @@ export class GroqProvider implements AIProvider {
       throw new TravelPlannerError("PROVIDER_NOT_CONFIGURED", "AI planner configuration is missing GROQ_API_KEY.");
     }
 
-    const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+    const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
     const endpoint = "https://api.groq.com/openai/v1/chat/completions";
 
     const payload = {
@@ -77,8 +77,7 @@ export class GroqProvider implements AIProvider {
       }
 
       console.error(
-        `[Roamly Groq Telemetry] Model '${model}' HTTP ${response.status}${errorCode ? ` [${errorCode}]` : ""}: ${
-          extractedMessage || "No details"
+        `[Roamly Groq Telemetry] Model '${model}' HTTP ${response.status}${errorCode ? ` [${errorCode}]` : ""}: ${extractedMessage || "No details"
         }`
       );
 
@@ -197,18 +196,18 @@ export class GroqProvider implements AIProvider {
 
           const dayWeatherInfo = weatherData?.days?.[d - 1]
             ? {
-                date: weatherData.days[d - 1].date,
-                condition: weatherData.days[d - 1].condition,
-                weatherCode: weatherData.days[d - 1].weatherCode,
-                temperatureMin: weatherData.days[d - 1].temperatureMin,
-                temperatureMax: weatherData.days[d - 1].temperatureMax,
-                precipitationProbability: weatherData.days[d - 1].precipitationProbability,
-                precipitationMm: weatherData.days[d - 1].precipitationMm,
-                sunrise: weatherData.days[d - 1].sunrise,
-                sunset: weatherData.days[d - 1].sunset,
-                mode: (weatherData.mode === "forecast" ? "forecast" : "climate_outlook") as "forecast" | "climate_outlook",
-                confidence: weatherData.confidence,
-              }
+              date: weatherData.days[d - 1].date,
+              condition: weatherData.days[d - 1].condition,
+              weatherCode: weatherData.days[d - 1].weatherCode,
+              temperatureMin: weatherData.days[d - 1].temperatureMin,
+              temperatureMax: weatherData.days[d - 1].temperatureMax,
+              precipitationProbability: weatherData.days[d - 1].precipitationProbability,
+              precipitationMm: weatherData.days[d - 1].precipitationMm,
+              sunrise: weatherData.days[d - 1].sunrise,
+              sunset: weatherData.days[d - 1].sunset,
+              mode: (weatherData.mode === "forecast" ? "forecast" : "climate_outlook") as "forecast" | "climate_outlook",
+              confidence: weatherData.confidence,
+            }
             : null;
 
           const generatedDay = await this.regenerateDay({
