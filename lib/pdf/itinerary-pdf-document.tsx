@@ -1,9 +1,20 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import type { Itinerary, TripRequest } from "@/lib/trip-schema";
-import { formatCurrency } from "@/lib/formatters";
 import { getDailyCarryChecklist, getTripWeatherSummary } from "@/lib/weather";
 
-// Define PDF styles
+/**
+ * Format currency for PDF exports cleanly without malformed UTF-8 characters
+ * (e.g. "INR 3,700" instead of "¹3,700").
+ */
+export function formatPdfCurrency(amount: number, currency: string = "INR"): string {
+  const num = Number(amount) || 0;
+  const formattedNum = num.toLocaleString("en-IN");
+  if (currency === "INR") {
+    return `INR ${formattedNum}`;
+  }
+  return `${currency} ${formattedNum}`;
+}
+
 const styles = StyleSheet.create({
   page: {
     paddingTop: 36,
@@ -32,7 +43,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   brandSubtitle: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: "#187764",
     fontFamily: "Helvetica-Bold",
     textTransform: "uppercase",
@@ -43,17 +54,19 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   docTitle: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: "#64748b",
-    fontFamily: "Helvetica",
+    fontFamily: "Helvetica-Bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   heroBanner: {
-    backgroundColor: "#f7f5f1",
+    backgroundColor: "#f8faf9",
     borderRadius: 8,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 18,
     borderWidth: 1,
-    borderColor: "#e8e3db",
+    borderColor: "#e2e8f0",
     borderStyle: "solid",
   },
   destinationTitle: {
@@ -63,9 +76,26 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   subDetails: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: "#475569",
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  metaGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
+  metaPill: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderStyle: "solid",
+    borderRadius: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    fontSize: 8.5,
+    color: "#334155",
   },
   costBox: {
     backgroundColor: "#16324f",
@@ -75,7 +105,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 4,
+    marginTop: 2,
   },
   costLabel: {
     color: "#cbd5e1",
@@ -86,27 +116,27 @@ const styles = StyleSheet.create({
   },
   costValue: {
     color: "#ffffff",
-    fontSize: 14,
+    fontSize: 13.5,
     fontFamily: "Helvetica-Bold",
   },
   weatherPdfBox: {
-    backgroundColor: "#e7f2ef",
+    backgroundColor: "#f0fdf4",
     borderRadius: 6,
     padding: 10,
     marginTop: 10,
     borderWidth: 1,
-    borderColor: "#cae2dc",
+    borderColor: "#bbf7d0",
     borderStyle: "solid",
   },
   weatherPdfTitle: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: "Helvetica-Bold",
-    color: "#187764",
+    color: "#166534",
     marginBottom: 3,
   },
   weatherPdfText: {
-    fontSize: 9,
-    color: "#334155",
+    fontSize: 8.5,
+    color: "#14532d",
     lineHeight: 1.4,
   },
   weatherPdfDisclosure: {
@@ -116,33 +146,33 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica-Oblique",
   },
   summaryText: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: "#334155",
     lineHeight: 1.5,
     marginTop: 10,
   },
   sectionHeading: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Helvetica-Bold",
     color: "#16324f",
-    marginBottom: 12,
-    marginTop: 8,
+    marginBottom: 10,
+    marginTop: 6,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   dayCard: {
-    marginBottom: 16,
+    marginBottom: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#cbd5e1",
     borderStyle: "solid",
     backgroundColor: "#ffffff",
     overflow: "hidden",
   },
   dayHeader: {
-    backgroundColor: "#e7f2ef",
+    backgroundColor: "#f1f5f9",
     paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -158,28 +188,28 @@ const styles = StyleSheet.create({
   dayNumberBadge: {
     color: "#187764",
     fontFamily: "Helvetica-Bold",
-    fontSize: 11,
+    fontSize: 10.5,
   },
   dayTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Helvetica-Bold",
     color: "#16324f",
   },
   dayCost: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: "Helvetica-Bold",
     color: "#187764",
   },
   weatherSubtext: {
-    fontSize: 8.5,
+    fontSize: 8,
     color: "#0d9488",
     fontFamily: "Helvetica-Bold",
     marginTop: 2,
     marginBottom: 6,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
   },
   dayContent: {
-    padding: 12,
+    padding: 10,
   },
   carryBox: {
     backgroundColor: "#fffdf0",
@@ -226,12 +256,12 @@ const styles = StyleSheet.create({
     lineHeight: 1.3,
   },
   categoryLabel: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontFamily: "Helvetica-Bold",
     color: "#64748b",
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    marginBottom: 8,
+    marginBottom: 6,
     marginTop: 4,
   },
   activityItem: {
@@ -239,7 +269,7 @@ const styles = StyleSheet.create({
     borderLeftColor: "#b6dfd5",
     borderLeftStyle: "solid",
     paddingLeft: 10,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   activityHeaderRow: {
     flexDirection: "row",
@@ -248,97 +278,97 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   activityName: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontFamily: "Helvetica-Bold",
     color: "#16324f",
     flex: 1,
   },
   activityCost: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: "Helvetica-Bold",
     color: "#187764",
   },
   activityMeta: {
-    fontSize: 8.5,
+    fontSize: 8,
     fontFamily: "Helvetica-Bold",
     color: "#64748b",
-    marginBottom: 3,
+    marginBottom: 2,
   },
   activityDesc: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: "#475569",
-    lineHeight: 1.4,
+    lineHeight: 1.35,
   },
   restaurantBox: {
     backgroundColor: "#fff8e9",
     borderRadius: 6,
-    padding: 10,
-    marginTop: 8,
+    padding: 8,
+    marginTop: 6,
     borderWidth: 1,
     borderColor: "#fde68a",
     borderStyle: "solid",
   },
   restaurantCategoryLabel: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontFamily: "Helvetica-Bold",
     color: "#b45309",
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   restaurantItem: {
-    marginBottom: 6,
+    marginBottom: 4,
   },
   restaurantName: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: "Helvetica-Bold",
     color: "#16324f",
   },
   restaurantMeta: {
-    fontSize: 8.5,
+    fontSize: 8,
     color: "#78350f",
   },
   tipsSection: {
-    backgroundColor: "#e7f2ef",
+    backgroundColor: "#f8faf9",
     borderRadius: 8,
-    padding: 14,
-    marginTop: 12,
-    marginBottom: 16,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#cae2dc",
+    borderColor: "#cbd5e1",
     borderStyle: "solid",
   },
   tipsTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Helvetica-Bold",
     color: "#16324f",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   tipItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 6,
+    marginBottom: 4,
   },
   tipBullet: {
-    width: 12,
-    fontSize: 10,
+    width: 10,
+    fontSize: 9,
     color: "#187764",
     fontFamily: "Helvetica-Bold",
   },
   tipText: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 8.5,
     color: "#334155",
-    lineHeight: 1.4,
+    lineHeight: 1.35,
   },
   disclaimer: {
-    fontSize: 8,
+    fontSize: 7.5,
     color: "#64748b",
-    marginTop: 8,
+    marginTop: 6,
     borderTopWidth: 1,
     borderTopColor: "#cbd5e1",
     borderTopStyle: "solid",
-    paddingTop: 6,
+    paddingTop: 4,
   },
   footer: {
     position: "absolute",
@@ -351,7 +381,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#e2e8f0",
     borderTopStyle: "solid",
-    paddingTop: 8,
+    paddingTop: 6,
   },
   footerBrand: {
     fontSize: 8,
@@ -390,16 +420,22 @@ export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumen
           </View>
         </View>
 
-        {/* Hero Banner */}
+        {/* Hero Banner / Cover Section */}
         <View style={styles.heroBanner}>
           <Text style={styles.destinationTitle}>{itinerary.destination}</Text>
-          <Text style={styles.subDetails}>
-            {itinerary.country} · {request.duration} Days · {request.travelers} {request.travelers === 1 ? "Traveler" : "Travelers"} · Style: {request.style}
-          </Text>
+          <Text style={styles.subDetails}>{itinerary.country}</Text>
+
+          <View style={styles.metaGrid}>
+            <Text style={styles.metaPill}>Duration: {request.duration} Days</Text>
+            <Text style={styles.metaPill}>
+              Travelers: {request.travelers} {request.travelers === 1 ? "Person" : "People"}
+            </Text>
+            <Text style={styles.metaPill}>Style: {request.style}</Text>
+          </View>
 
           <View style={styles.costBox}>
             <Text style={styles.costLabel}>Estimated Total Cost</Text>
-            <Text style={styles.costValue}>{formatCurrency(itinerary.estimatedTotalCost, currency)}</Text>
+            <Text style={styles.costValue}>{formatPdfCurrency(itinerary.estimatedTotalCost, currency)}</Text>
           </View>
 
           {/* Trip Weather Outlook PDF Box */}
@@ -435,13 +471,13 @@ export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumen
                   <Text style={styles.dayNumberBadge}>DAY {day.day}:</Text>
                   <Text style={styles.dayTitle}>{day.title}</Text>
                 </View>
-                <Text style={styles.dayCost}>{formatCurrency(day.dailyEstimatedCost, currency)}</Text>
+                <Text style={styles.dayCost}>{formatPdfCurrency(day.dailyEstimatedCost, currency)}</Text>
               </View>
 
               {/* Weather Subtext */}
               {day.weather && (
                 <Text style={styles.weatherSubtext}>
-                  Weather: {day.weather.condition} ({day.weather.temperatureMin ?? 'N/A'}°C to {day.weather.temperatureMax ?? 'N/A'}°C
+                  Weather: {day.weather.condition} ({day.weather.temperatureMin ?? "N/A"}°C to {day.weather.temperatureMax ?? "N/A"}°C
                   {day.weather.precipitationProbability != null && day.weather.precipitationProbability > 0
                     ? ` · ${day.weather.precipitationProbability}% rain`
                     : ""}) · {day.weather.mode === "forecast" ? "Forecast" : "Typical Conditions"}
@@ -452,7 +488,7 @@ export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumen
                 {/* Carry Checklist PDF Box */}
                 {checklist && checklist.length > 0 && (
                   <View style={styles.carryBox}>
-                    <Text style={styles.carryCategoryLabel}>WHAT TO CARRY TODAY</Text>
+                    <Text style={styles.carryCategoryLabel}>WHAT TO CARRY</Text>
                     <Text style={styles.carryText}>
                       {checklist.map((item) => `• ${item.label}`).join("   ")}
                     </Text>
@@ -474,10 +510,10 @@ export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumen
                   <View>
                     <Text style={styles.categoryLabel}>Explore Activities</Text>
                     {day.activities.map((activity, idx) => (
-                      <View key={idx} style={styles.activityItem}>
+                      <View key={idx} style={styles.activityItem} wrap={false}>
                         <View style={styles.activityHeaderRow}>
                           <Text style={styles.activityName}>{activity.name}</Text>
-                          <Text style={styles.activityCost}>{formatCurrency(activity.estimatedCost, currency)}</Text>
+                          <Text style={styles.activityCost}>{formatPdfCurrency(activity.estimatedCost, currency)}</Text>
                         </View>
                         <Text style={styles.activityMeta}>
                           {activity.startTime} · {activity.duration} · {activity.location}
@@ -490,14 +526,14 @@ export function ItineraryPdfDocument({ itinerary, request }: ItineraryPdfDocumen
 
                 {/* Restaurants */}
                 {day.restaurants && day.restaurants.length > 0 && (
-                  <View style={styles.restaurantBox}>
+                  <View style={styles.restaurantBox} wrap={false}>
                     <Text style={styles.restaurantCategoryLabel}>Dining & Local Flavors</Text>
                     {day.restaurants.map((restaurant, idx) => (
                       <View key={idx} style={styles.restaurantItem}>
                         <View style={styles.activityHeaderRow}>
                           <Text style={styles.restaurantName}>{restaurant.name}</Text>
-                          <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", color: "#b45309" }}>
-                            {formatCurrency(restaurant.estimatedCost, currency)}
+                          <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: "#b45309" }}>
+                            {formatPdfCurrency(restaurant.estimatedCost, currency)}
                           </Text>
                         </View>
                         <Text style={styles.restaurantMeta}>

@@ -15,7 +15,6 @@ export function TripWeatherOutlook({ dailyItinerary }: TripWeatherOutlookProps) 
     return (
       <div className="card-warm p-5 sm:p-6 bg-white border border-[#eae4d9]">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-          <span className="text-base">🌦</span>
           <span>Trip Weather Outlook</span>
         </div>
         <p className="mt-2 text-sm text-slate-600 font-medium">
@@ -88,7 +87,7 @@ export function TripWeatherOutlook({ dailyItinerary }: TripWeatherOutlookProps) 
       {/* Weather Recommendation Box */}
       <div className="mt-5 rounded-2xl bg-[#f0fdf4] p-4 border border-[#bbf7d0]">
         <p className="text-xs font-bold text-[#166534] flex items-center gap-1.5">
-          <span>💡 Smart Weather Recommendation:</span>
+          <span>Weather Recommendation:</span>
         </p>
         <p className="mt-1 text-xs text-[#15803d] leading-relaxed font-semibold">
           {summary.recommendation}

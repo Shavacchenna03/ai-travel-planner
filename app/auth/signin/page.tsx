@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent, Suspense } from "react";
 import { signIn } from "next-auth/react";
 
@@ -19,6 +19,7 @@ export default function SignInPage() {
 }
 
 function SignInForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = sanitizeCallbackUrl(searchParams.get("callbackUrl"));
 
@@ -50,7 +51,8 @@ function SignInForm() {
         return;
       }
 
-      window.location.href = callbackUrl;
+      router.push(callbackUrl);
+      router.refresh();
     } catch (err) {
       console.error("Sign in failed:", err);
       setError("Something went wrong while signing in. Please try again.");

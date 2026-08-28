@@ -8,21 +8,18 @@ export function NearbyPlaces({ places }: NearbyPlacesProps) {
   if (!places || places.length === 0) return null;
 
   return (
-    <div className="mt-4 rounded-2xl bg-gradient-to-r from-[#f0fdf4] via-white to-[#ecfdf5] p-4 sm:p-5 border border-[#bbf7d0] shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#bbf7d0] pb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-base">📍</span>
-          <div>
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#166534]">
-              Nearby Recommendations
-            </h3>
-            <p className="text-[11px] font-medium text-slate-500">
-              Useful local spots near today&apos;s itinerary
-            </p>
-          </div>
+    <div className="mt-4 rounded-2xl bg-[#f0fdf4]/80 p-4 sm:p-5 border border-[#bbf7d0] shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#bbf7d0]/60 pb-3">
+        <div>
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-[#166534]">
+            Nearby Recommendations
+          </h3>
+          <p className="text-[11px] font-medium text-emerald-800/80">
+            Useful local spots near today&apos;s itinerary
+          </p>
         </div>
-        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-          {places.length} Spots
+        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+          {places.length} Recommendations
         </span>
       </div>
 
@@ -35,10 +32,10 @@ export function NearbyPlaces({ places }: NearbyPlacesProps) {
             <div>
               <div className="flex items-start justify-between gap-2">
                 <h4 className="text-xs font-extrabold text-[#0f172a] leading-snug">
-                  ⭐ {place.name}
+                  {place.name}
                 </h4>
                 <span className="shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-700 border border-emerald-200">
-                  {place.distanceKm} km away
+                  {place.distanceKm} km
                 </span>
               </div>
 

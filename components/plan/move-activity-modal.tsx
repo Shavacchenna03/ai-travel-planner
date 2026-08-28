@@ -34,7 +34,7 @@ export function MoveActivityModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white shadow-2xl">
+      <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-[#ea580c]">
           <ArrowUpDown className="size-4 text-[#ea580c]" />
           <span>Move Activity</span>

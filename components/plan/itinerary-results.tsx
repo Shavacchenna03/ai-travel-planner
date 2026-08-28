@@ -529,7 +529,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white shadow-2xl">
+          <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex size-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
               <Trash2 className="size-6" />
             </div>
@@ -732,7 +732,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
 
                             {day.weather.precipitationProbability != null && day.weather.precipitationProbability > 0 && (
                               <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-extrabold text-blue-700 border border-blue-200">
-                                💧 {day.weather.precipitationProbability}% rain
+                                {day.weather.precipitationProbability}% rain
                               </span>
                             )}
 
@@ -876,8 +876,8 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                     <GripVertical className="size-4" />
                                   </div>
 
-                                  <div>
-                                    <h4 className="text-base font-bold text-[#0f172a]">{activity.name}</h4>
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="text-base font-bold text-[#0f172a] break-words">{activity.name}</h4>
 
                                     {/* Deterministic "Why this activity?" Weather Attribution Tag */}
                                     {activityWeatherContext && (
@@ -942,11 +942,12 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                     Edit
                                   </button>
 
-                                  {/* Standard AI Regenerate Activity */}
+                                  {/* Standard Regenerate Activity */}
                                   <button
                                     type="button"
                                     onClick={() => handleOpenRegenerateActivity(day.day, idx, activity)}
-                                    title="Regenerate with AI"
+                                    title="Regenerate Activity"
+                                    aria-label="Regenerate Activity"
                                     className="rounded-lg p-1.5 text-[#ea580c] hover:bg-[#ffedd5] transition-colors"
                                   >
                                     <Sparkles className="size-3.5" />
@@ -957,7 +958,8 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
                                     <button
                                       type="button"
                                       onClick={() => handleOpenRegenerateActivityForWeather(day.day, idx, activity)}
-                                      title="Regenerate Activity optimized for weather"
+                                      title="Optimize activity for weather"
+                                      aria-label="Optimize activity for weather"
                                       className="rounded-lg px-2 py-1 bg-teal-50 text-[#0d9488] hover:bg-teal-100 transition-colors text-xs font-bold border border-teal-200"
                                     >
                                       Weather Alt

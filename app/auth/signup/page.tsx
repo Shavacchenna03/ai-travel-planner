@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { FieldError, FieldLabel, Input } from "@/components/ui/field";
 
 export default function SignUpPage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -66,11 +68,12 @@ export default function SignUpPage() {
       });
 
       if (!signInRes || signInRes.error) {
-        window.location.href = "/auth/signin?registered=true";
+        router.push("/auth/signin?registered=true");
         return;
       }
 
-      window.location.href = "/trips";
+      router.push("/trips");
+      router.refresh();
     } catch (err) {
       console.error("Registration failed:", err);
       setError("Something went wrong while creating your account. Please try again.");

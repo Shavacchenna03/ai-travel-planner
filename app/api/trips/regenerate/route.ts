@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { regenerateActivity, regenerateDay, TravelPlannerError } from "@/lib/ai/travel-planner";
 import { activitySchema, dailyItinerarySchema, tripRequestSchema, weatherDataSchema } from "@/lib/trip-schema";
 
@@ -19,7 +20,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { target, dayNumber, instruction, dayWeather } = body;
+  const { target, dayNumber, instruction, dayWeather, tripId } = body;
+
+  // Verify trip ownership if tripId is provided
+  if (typeof tripId === "string" && tripId) {
+    try {
+      const existingTrip = await prisma.trip.findUnique({
+        where: { id: tripId },
+        select: { userId: true },
+      });
+
+      if (existingTrip && existingTrip.userId && existingTrip.userId !== session.user.id) {
+        return NextResponse.json(
+          { error: "You do not have permission to regenerate content for this trip." },
+          { status: 403 }
+        );
+      }
+    } catch {
+      // Ignore query errors if trip doesn't exist yet in DB
+    }
+  }
+
   const requestValidation = tripRequestSchema.safeParse(body.request);
 
   if (!requestValidation.success) {

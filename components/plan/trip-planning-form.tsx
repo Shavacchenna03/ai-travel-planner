@@ -36,11 +36,11 @@ const initialValues: FormValues = {
 };
 
 const loadingMessages = [
-  "Searching destination highlights…",
-  "Checking live weather & climate outlook…",
-  "Tailoring activities to your budget…",
-  "Optimizing daily travel pace…",
-  "Finalizing your personalized itinerary…",
+  "Checking destination weather conditions…",
+  "Building day-by-day activities…",
+  "Finding local recommendations…",
+  "Tailoring activities to your budget & pace…",
+  "Finalizing your custom travel plan…",
 ];
 
 export function TripPlanningForm() {
@@ -73,12 +73,12 @@ export function TripPlanningForm() {
     if (values.destination.trim().length < 2) next.destination = "Please enter a destination.";
     if (!values.budget || Number(values.budget) <= 0) next.budget = "Enter a budget greater than zero.";
     if (!values.duration || Number(values.duration) < 1 || Number(values.duration) > 30)
-      next.duration = "Choose between 1 and 30 days.";
+      next.duration = "Choose a duration between 1 and 30 days.";
     if (!values.travelers || Number(values.travelers) < 1 || Number(values.travelers) > 12)
       next.travelers = "Choose between 1 and 12 travelers.";
-    if (!values.style) next.style = "Choose a travel style.";
-    if (!values.accommodation) next.accommodation = "Choose an accommodation preference.";
-    if (!values.food) next.food = "Choose a food preference.";
+    if (!values.style) next.style = "Please select a travel style.";
+    if (!values.accommodation) next.accommodation = "Please select an accommodation preference.";
+    if (!values.food) next.food = "Please select a food preference.";
     return next;
   }
 
@@ -150,153 +150,167 @@ export function TripPlanningForm() {
       <div className="mb-8 pb-6 border-b border-[#eae4d9]">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#ea580c]">
           <Sparkles className="size-4 text-[#f97316]" />
-          <span>Weather-Aware Itinerary Creator</span>
+          <span>Itinerary Setup</span>
         </div>
         <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-[#0f172a]">Trip Details</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Personalize your journey. Roamly will adapt your activities to live weather & climate trends!
+          Tell us about your trip. Roamly will adapt your daily schedule to live weather forecasts and local recommendations.
         </p>
       </div>
 
       {/* Form Sections */}
-      <div className="space-y-6">
-        {/* Destination & Start Date */}
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <FieldLabel htmlFor="destination">
-              <span className="flex items-center gap-1.5">
-                <MapPin className="size-4 text-[#f97316]" /> Destination
-              </span>
-            </FieldLabel>
-            <Input
-              id="destination"
-              value={values.destination}
-              onChange={update("destination")}
-              placeholder="e.g. Goa, Tokyo, Paris, Manali"
-              aria-invalid={Boolean(errors.destination)}
-            />
-            <FieldError message={errors.destination} />
-          </div>
+      <div className="space-y-8">
+        {/* Section 1: Primary Trip Details */}
+        <div className="space-y-5">
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+            1. Primary Trip Details
+          </h3>
 
-          <div>
-            <FieldLabel htmlFor="startDate">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="size-4 text-[#0d9488]" /> Start Date (Optional)
-              </span>
-            </FieldLabel>
-            <Input
-              id="startDate"
-              type="date"
-              value={values.startDate}
-              onChange={update("startDate")}
-            />
-            <p className="mt-1 text-[11px] font-medium text-slate-500">
-              Defaults to 7 days from today for live forecast mode.
-            </p>
-          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <FieldLabel htmlFor="destination">
+                <span className="flex items-center gap-1.5 font-bold text-sm text-[#0f172a]">
+                  <MapPin className="size-4 text-[#f97316]" /> Destination
+                </span>
+              </FieldLabel>
+              <Input
+                id="destination"
+                value={values.destination}
+                onChange={update("destination")}
+                placeholder="e.g. Goa, Tokyo, Paris, Manali, Jaipur"
+                className="text-base py-3 font-semibold"
+                aria-invalid={Boolean(errors.destination)}
+              />
+              <FieldError message={errors.destination} />
+            </div>
 
-          <div>
-            <FieldLabel htmlFor="budget">Total trip budget</FieldLabel>
-            <Input
-              id="budget"
-              type="number"
-              min="1"
-              value={values.budget}
-              onChange={update("budget")}
-              placeholder="e.g. 35000"
-              aria-describedby="budget-help"
-              aria-invalid={Boolean(errors.budget)}
-            />
-            <p id="budget-help" className="mt-1.5 text-xs text-slate-500">
-              Total group limit in selected currency.
-            </p>
-            <FieldError message={errors.budget} />
-          </div>
+            <div>
+              <FieldLabel htmlFor="startDate">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="size-4 text-[#0d9488]" /> Start Date (Optional)
+                </span>
+              </FieldLabel>
+              <Input
+                id="startDate"
+                type="date"
+                value={values.startDate}
+                onChange={update("startDate")}
+              />
+              <p className="mt-1 text-[11px] font-medium text-slate-500">
+                Weather forecasts are available for upcoming dates; longer trips use typical seasonal conditions.
+              </p>
+            </div>
 
-          <div>
-            <FieldLabel htmlFor="currency">Currency</FieldLabel>
-            <Select id="currency" value={values.currency} onChange={update("currency")}>
-              <option value="INR">INR (₹)</option>
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="JPY">JPY (¥)</option>
-            </Select>
+            <div>
+              <FieldLabel htmlFor="duration">
+                <span className="flex items-center gap-1.5">
+                  <Compass className="size-4 text-[#0d9488]" /> Duration (days)
+                </span>
+              </FieldLabel>
+              <Input
+                id="duration"
+                type="number"
+                min="1"
+                max="30"
+                value={values.duration}
+                onChange={update("duration")}
+                placeholder="e.g. 4"
+                aria-invalid={Boolean(errors.duration)}
+              />
+              <FieldError message={errors.duration} />
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="travelers">
+                <span className="flex items-center gap-1.5">
+                  <Users className="size-4 text-[#0d9488]" /> Number of Travelers
+                </span>
+              </FieldLabel>
+              <Input
+                id="travelers"
+                type="number"
+                min="1"
+                max="12"
+                value={values.travelers}
+                onChange={update("travelers")}
+                aria-invalid={Boolean(errors.travelers)}
+              />
+              <FieldError message={errors.travelers} />
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="budget">Total Group Budget</FieldLabel>
+              <div className="flex gap-2">
+                <Input
+                  id="budget"
+                  type="number"
+                  min="1"
+                  value={values.budget}
+                  onChange={update("budget")}
+                  placeholder="e.g. 35000"
+                  className="flex-1"
+                  aria-describedby="budget-help"
+                  aria-invalid={Boolean(errors.budget)}
+                />
+                <Select
+                  id="currency"
+                  value={values.currency}
+                  onChange={update("currency")}
+                  className="w-28 shrink-0 font-bold"
+                >
+                  <option value="INR">INR (₹)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="EUR">EUR (€)</option>
+                  <option value="GBP">GBP (£)</option>
+                  <option value="JPY">JPY (¥)</option>
+                </Select>
+              </div>
+              <p id="budget-help" className="mt-1.5 text-xs text-slate-500">
+                Total group limit for activities, meals, and transport.
+              </p>
+              <FieldError message={errors.budget} />
+            </div>
           </div>
         </div>
 
-        {/* Duration & Travelers */}
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <FieldLabel htmlFor="duration">
-              <span className="flex items-center gap-1.5">
-                <Compass className="size-4 text-[#0d9488]" /> Duration (days)
-              </span>
-            </FieldLabel>
-            <Input
-              id="duration"
-              type="number"
-              min="1"
-              max="30"
-              value={values.duration}
-              onChange={update("duration")}
-              placeholder="e.g. 4"
-              aria-invalid={Boolean(errors.duration)}
-            />
-            <FieldError message={errors.duration} />
-          </div>
+        {/* Section 2: Travel Preferences */}
+        <div className="space-y-5 pt-2">
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+            2. Travel Preferences
+          </h3>
 
-          <div>
-            <FieldLabel htmlFor="travelers">
-              <span className="flex items-center gap-1.5">
-                <Users className="size-4 text-[#0d9488]" /> Travelers
-              </span>
-            </FieldLabel>
-            <Input
-              id="travelers"
-              type="number"
-              min="1"
-              max="12"
-              value={values.travelers}
-              onChange={update("travelers")}
-              aria-invalid={Boolean(errors.travelers)}
-            />
-            <FieldError message={errors.travelers} />
-          </div>
-        </div>
-
-        {/* Preferences & Style */}
-        <div className="grid gap-5 sm:grid-cols-2">
-          <SelectField
-            id="style"
-            label="Travel style"
-            icon={<Tag className="size-4 text-[#f59e0b]" />}
-            value={values.style}
-            onChange={update("style")}
-            error={errors.style}
-            options={travelStyles}
-          />
-
-          <SelectField
-            id="accommodation"
-            label="Accommodation"
-            icon={<Compass className="size-4 text-[#f59e0b]" />}
-            value={values.accommodation}
-            onChange={update("accommodation")}
-            error={errors.accommodation}
-            options={accommodationPreferences}
-          />
-
-          <div className="sm:col-span-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             <SelectField
-              id="food"
-              label="Food preference"
-              icon={<Utensils className="size-4 text-[#ea580c]" />}
-              value={values.food}
-              onChange={update("food")}
-              error={errors.food}
-              options={foodPreferences}
+              id="style"
+              label="Travel style"
+              icon={<Tag className="size-4 text-[#f59e0b]" />}
+              value={values.style}
+              onChange={update("style")}
+              error={errors.style}
+              options={travelStyles}
             />
+
+            <SelectField
+              id="accommodation"
+              label="Accommodation"
+              icon={<Compass className="size-4 text-[#f59e0b]" />}
+              value={values.accommodation}
+              onChange={update("accommodation")}
+              error={errors.accommodation}
+              options={accommodationPreferences}
+            />
+
+            <div className="sm:col-span-2">
+              <SelectField
+                id="food"
+                label="Food preference"
+                icon={<Utensils className="size-4 text-[#ea580c]" />}
+                value={values.food}
+                onChange={update("food")}
+                error={errors.food}
+                options={foodPreferences}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -313,7 +327,7 @@ export function TripPlanningForm() {
         type="submit"
         size="lg"
         disabled={isSubmitting}
-        className="mt-8 w-full bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-lg shadow-orange-500/20 py-6 transition-all hover:scale-[1.01]"
+        className="mt-8 w-full bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-lg shadow-orange-500/20 py-6 text-base transition-all hover:scale-[1.01]"
       >
         {isSubmitting ? (
           <span className="flex items-center gap-2">
@@ -321,7 +335,7 @@ export function TripPlanningForm() {
             <span>{loadingMessages[loadingMessageIndex]}</span>
           </span>
         ) : (
-          "Generate Weather-Aware Itinerary"
+          "Create My Itinerary"
         )}
       </Button>
 

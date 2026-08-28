@@ -54,10 +54,10 @@ export function AIRegenerateModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white shadow-2xl">
+      <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-[#ea580c]">
           <Sparkles className="size-4 text-[#f97316]" />
-          <span>AI Partial Regeneration</span>
+          <span>Regenerate Section</span>
         </div>
 
         <h3 className="mt-2 text-2xl font-extrabold tracking-tight text-[#0f172a]">
@@ -70,8 +70,8 @@ export function AIRegenerateModal({
 
         <p className="mt-3 text-xs text-slate-600 leading-relaxed">
           {target === "activity"
-            ? "AI will replace only this activity. The rest of your trip and day schedule will remain untouched."
-            : `AI will regenerate Day ${dayNumber}'s itinerary. All other days in your trip will remain unchanged.`}
+            ? "Roamly will replace only this activity. The rest of your trip and day schedule will remain untouched."
+            : `Roamly will regenerate Day ${dayNumber}'s itinerary. All other days in your trip will remain unchanged.`}
         </p>
 
         {error && (
@@ -82,7 +82,7 @@ export function AIRegenerateModal({
 
         <div className="mt-4">
           <label htmlFor="ai-instruction" className="block text-xs font-bold text-[#0f172a] mb-1.5">
-            Instructions for AI
+            Custom Instructions (Optional)
           </label>
           <textarea
             id="ai-instruction"

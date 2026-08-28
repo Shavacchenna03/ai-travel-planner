@@ -24,15 +24,15 @@ export default async function PlanPage() {
           <div className="lg:pt-4 space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#f97316]/20 bg-[#ffedd5]/80 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-[#ea580c]">
               <Sparkles className="size-3.5 text-[#f97316]" />
-              <span>Personalized Travel Studio</span>
+              <span>Personalized Trip Studio</span>
             </div>
 
             <h1 className="text-4xl font-extrabold tracking-tight text-[#0f172a] sm:text-5xl leading-[1.1]">
-              Where would you like to explore?
+              Create Your Custom Travel Plan
             </h1>
 
             <p className="text-base text-slate-600 sm:text-lg leading-relaxed">
-              Share the shape of your trip. We’ll generate a balanced day-by-day itinerary tailored to your budget, group size, and travel style.
+              Specify your destination, dates, budget, and preferences. We’ll build a balanced day-by-day itinerary tailored to your style.
             </p>
 
             {/* Feature Cards */}
@@ -42,9 +42,9 @@ export default async function PlanPage() {
                   <Compass className="size-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#0f172a]">Smart Daily Timelines</h3>
+                  <h3 className="text-sm font-bold text-[#0f172a]">Structured Daily Schedules</h3>
                   <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                    Activities arranged logically by geographic proximity and optimal timing.
+                    Activities arranged logically by geographic proximity, optimal timing, and travel pace.
                   </p>
                 </div>
               </div>
@@ -54,9 +54,9 @@ export default async function PlanPage() {
                   <Shield className="size-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#0f172a]">Budget Controlled</h3>
+                  <h3 className="text-sm font-bold text-[#0f172a]">Budget & Cost Estimates</h3>
                   <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                    Estimated activity & dining costs structured around your exact budget limit.
+                    Estimated activity & dining costs structured cleanly around your group budget limit.
                   </p>
                 </div>
               </div>
@@ -66,9 +66,9 @@ export default async function PlanPage() {
                   <Heart className="size-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#0f172a]">Saved to Your Profile</h3>
+                  <h3 className="text-sm font-bold text-[#0f172a]">Saved & Exportable Guides</h3>
                   <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                    Access your itineraries anytime and download print-ready PDF travel guides.
+                    Access your itineraries anytime, edit activities interactively, and export print-ready PDFs.
                   </p>
                 </div>
               </div>

@@ -10,7 +10,7 @@ import { Calendar, MapPin, Tag, Users, ArrowRight, Compass, Sparkles } from "@/c
 
 export const metadata = {
   title: "Saved Trips — Roamly",
-  description: "View and manage your saved travel itineraries.",
+  description: "Browse, manage, and export your saved travel itineraries.",
 };
 
 export const revalidate = 0; // Dynamic server rendering for fresh DB data
@@ -90,7 +90,7 @@ export default async function SavedTripsPage() {
               Saved Trips
             </h1>
             <p className="mt-2 text-base text-slate-600">
-              Browse, view, and export your personalized travel itineraries.
+              Browse, manage, and export your saved travel itineraries.
             </p>
           </div>
 
@@ -99,7 +99,7 @@ export default async function SavedTripsPage() {
             size="lg"
             className="bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/20"
           >
-            <Link href="/plan">Plan a new trip</Link>
+            <Link href="/plan">Plan a New Trip</Link>
           </Button>
         </div>
 
@@ -108,7 +108,7 @@ export default async function SavedTripsPage() {
           <div role="alert" className="mt-8 rounded-2xl bg-rose-50 p-6 border border-rose-200 text-rose-800">
             <h3 className="font-extrabold text-base">Unable to load saved trips</h3>
             <p className="mt-1 text-sm text-rose-700">
-              We encountered a problem connecting to the database. Please ensure your PostgreSQL container is running and try refreshing the page.
+              We encountered a problem connecting to the database. Please ensure your database connection is active and refresh the page.
             </p>
           </div>
         )}
@@ -123,14 +123,14 @@ export default async function SavedTripsPage() {
               No saved trips yet
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              When you generate a trip itinerary while signed in, it will automatically be saved here for easy access and PDF export.
+              When you create a travel plan while signed in, it will automatically be saved here for easy access, editing, and PDF export.
             </p>
             <Button
               asChild
               size="lg"
               className="mt-6 bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white font-extrabold rounded-2xl shadow-md"
             >
-              <Link href="/plan">Plan your first trip</Link>
+              <Link href="/plan">Plan Your First Trip</Link>
             </Button>
           </div>
         )}
@@ -141,13 +141,13 @@ export default async function SavedTripsPage() {
             {trips.map((trip) => (
               <article
                 key={trip.id}
-                className="card-warm p-6 bg-white flex flex-col justify-between"
+                className="group card-warm p-6 bg-white flex flex-col justify-between transition-all duration-200 hover:border-[#ea580c]/50 hover:shadow-lg"
               >
                 <div>
                   {/* Card Header */}
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h2 className="text-2xl font-extrabold text-[#0f172a] tracking-tight">
+                      <h2 className="text-2xl font-extrabold text-[#0f172a] tracking-tight group-hover:text-[#ea580c] transition-colors">
                         {trip.destination}
                       </h2>
                       <p className="text-xs font-bold text-[#0d9488] mt-0.5 inline-flex items-center gap-1">
@@ -197,10 +197,10 @@ export default async function SavedTripsPage() {
                     <Button
                       asChild
                       size="default"
-                      className="bg-[#0f172a] hover:bg-[#1e293b] text-white text-xs font-bold px-4 rounded-xl"
+                      className="bg-[#0f172a] hover:bg-[#ea580c] text-white text-xs font-bold px-4 rounded-xl transition-colors"
                     >
                       <Link href={`/trips/${trip.id}`}>
-                        <span>View Trip</span>
+                        <span>View Itinerary</span>
                         <ArrowRight className="size-3.5" />
                       </Link>
                     </Button>
