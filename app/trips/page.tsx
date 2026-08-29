@@ -78,18 +78,18 @@ export default async function SavedTripsPage() {
       <NavigationHeader />
 
       {/* Main Page Container */}
-      <section className="mx-auto max-w-7xl px-6 pt-10 sm:px-10">
+      <section className="mx-auto max-w-7xl px-4 sm:px-10 pt-6 sm:pt-10">
         {/* Title Header */}
-        <div className="flex flex-col justify-between gap-4 border-b border-[#eae4d9] pb-8 md:flex-row md:items-end">
+        <div className="flex flex-col justify-between gap-4 border-b border-[#eae4d9] pb-6 sm:pb-8 md:flex-row md:items-end">
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-[#ea580c]">
               <Sparkles className="size-3.5 text-[#f97316]" />
               <span>My Travel Collection</span>
             </div>
-            <h1 className="mt-1 text-4xl font-extrabold tracking-tight text-[#0f172a] sm:text-5xl">
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#0f172a] sm:text-5xl">
               Saved Trips
             </h1>
-            <p className="mt-2 text-base text-slate-600">
+            <p className="mt-1.5 text-sm sm:text-base text-slate-600">
               Browse, manage, and export your saved travel itineraries.
             </p>
           </div>
@@ -97,7 +97,7 @@ export default async function SavedTripsPage() {
           <Button
             asChild
             size="lg"
-            className="bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/20"
+            className="w-full sm:w-auto bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/20 justify-center"
           >
             <Link href="/plan">Plan a New Trip</Link>
           </Button>
@@ -115,7 +115,7 @@ export default async function SavedTripsPage() {
 
         {/* Empty State */}
         {!queryError && trips.length === 0 && (
-          <div className="mt-12 mx-auto max-w-md card-warm p-8 text-center bg-white">
+          <div className="mt-10 mx-auto max-w-md card-warm p-6 sm:p-8 text-center bg-white">
             <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-[#ffedd5] text-[#ea580c]">
               <Compass className="size-7" />
             </div>
@@ -128,7 +128,7 @@ export default async function SavedTripsPage() {
             <Button
               asChild
               size="lg"
-              className="mt-6 bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white font-extrabold rounded-2xl shadow-md"
+              className="mt-6 w-full sm:w-auto bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white font-extrabold rounded-2xl shadow-md justify-center"
             >
               <Link href="/plan">Plan Your First Trip</Link>
             </Button>
@@ -137,11 +137,11 @@ export default async function SavedTripsPage() {
 
         {/* Trips Grid */}
         {!queryError && trips.length > 0 && (
-          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 sm:mt-10 grid gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {trips.map((trip) => (
               <article
                 key={trip.id}
-                className="group card-warm p-6 bg-white flex flex-col justify-between transition-all duration-200 hover:border-[#ea580c]/50 hover:shadow-lg"
+                className="group card-warm p-5 sm:p-6 bg-white flex flex-col justify-between transition-all duration-200 hover:border-[#ea580c]/50 hover:shadow-lg"
               >
                 <div>
                   {/* Card Header */}

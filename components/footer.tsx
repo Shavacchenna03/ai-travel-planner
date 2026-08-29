@@ -18,7 +18,7 @@ export function Footer() {
 
   return (
     <footer className="border-t border-[#eae4d9] bg-[#f5f2ec] text-[#0f172a]">
-      <div className="mx-auto max-w-7xl px-6 py-10 sm:px-10 lg:px-12">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-10 sm:py-10 lg:px-12">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-[#e4dfd6]">
           {/* Brand & Subtitle */}
           <div className="space-y-2">

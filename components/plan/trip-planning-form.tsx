@@ -240,7 +240,7 @@ export function TripPlanningForm() {
 
             <div className="sm:col-span-2">
               <FieldLabel htmlFor="budget">Total Group Budget</FieldLabel>
-              <div className="mt-2 grid grid-cols-[1fr_130px] gap-2 items-center">
+              <div className="mt-2 grid grid-cols-[1fr_115px] sm:grid-cols-[1fr_130px] gap-2 items-center">
                 <Input
                   id="budget"
                   type="number"
@@ -256,7 +256,7 @@ export function TripPlanningForm() {
                   id="currency"
                   value={values.currency}
                   onChange={update("currency")}
-                  className="!mt-0 !w-[130px] shrink-0 font-bold"
+                  className="!mt-0 !w-[115px] sm:!w-[130px] shrink-0 font-bold"
                 >
                   <option value="INR">INR (₹)</option>
                   <option value="USD">USD ($)</option>

@@ -17,7 +17,7 @@ export default async function PlanPage() {
     <main className="min-h-screen bg-[#faf8f5] text-[#0f172a] font-sans pb-20">
       <NavigationHeader />
 
-      <section className="mx-auto max-w-7xl px-6 pt-10 sm:px-10 lg:pt-16">
+      <section className="mx-auto max-w-7xl px-4 sm:px-10 pt-6 sm:pt-10 lg:pt-16">
         <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16 lg:items-start">
           
           {/* Left Column Intro */}

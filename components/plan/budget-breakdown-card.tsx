@@ -63,7 +63,7 @@ export function BudgetBreakdownCard({ itinerary, currency, travelers = 1 }: Budg
       </div>
 
       {/* Category Cost Cards Grid */}
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-5 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {/* Category: Activities */}
         <div className="rounded-2xl bg-[#fff7ed] p-4 border border-[#ffedd5] transition-all hover:bg-white hover:shadow-sm">
           <div className="flex items-center justify-between">

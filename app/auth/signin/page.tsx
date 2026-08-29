@@ -67,18 +67,18 @@ function SignInForm() {
   }
 
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-6 py-12 text-[#0f172a] font-sans flex flex-col justify-center items-center">
+    <main className="min-h-screen bg-[#faf8f5] px-4 py-8 sm:px-6 sm:py-12 text-[#0f172a] font-sans flex flex-col justify-center items-center">
       {/* Brand Logo */}
-      <Link href="/" className="mb-8 flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#0f172a] group">
-        <span className="grid size-10 place-items-center rounded-2xl bg-gradient-to-tr from-[#ea580c] to-[#f97316] text-white shadow-md shadow-orange-500/20 transition-transform duration-300 group-hover:scale-105">
-          <Compass className="size-6" />
+      <Link href="/" className="mb-6 sm:mb-8 flex items-center gap-2.5 text-2xl font-extrabold tracking-tight text-[#0f172a] group">
+        <span className="grid size-9 sm:size-10 place-items-center rounded-2xl bg-gradient-to-tr from-[#ea580c] to-[#f97316] text-white shadow-md shadow-orange-500/20 transition-transform duration-300 group-hover:scale-105">
+          <Compass className="size-5 sm:size-6" />
         </span>
-        <span className="text-2xl font-black bg-gradient-to-r from-[#0f172a] to-[#ea580c] bg-clip-text text-transparent">
+        <span className="text-xl sm:text-2xl font-black bg-gradient-to-r from-[#0f172a] to-[#ea580c] bg-clip-text text-transparent">
           Roamly
         </span>
       </Link>
 
-      <div className="w-full max-w-md card-warm p-6 sm:p-8 bg-white">
+      <div className="w-full max-w-md card-warm p-5 sm:p-8 bg-white">
         <div className="mb-6 text-center">
           <h1 className="text-3xl font-extrabold tracking-tight text-[#0f172a]">Welcome back</h1>
           <p className="mt-1.5 text-sm text-slate-600">Sign in to access your saved travel itineraries.</p>

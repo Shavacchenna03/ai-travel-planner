@@ -47,7 +47,7 @@ export function DayChecklistSidebar({
 
   return (
     <aside className="space-y-6">
-      <div className="rounded-3xl border border-[#eae4d9] bg-white p-5 sm:p-6 shadow-md lg:sticky lg:top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
+      <div className="rounded-3xl border border-[#eae4d9] bg-white p-4 sm:p-6 shadow-md lg:sticky lg:top-24 max-h-[32rem] lg:max-h-[calc(100vh-7rem)] overflow-y-auto">
         {/* Sidebar Title */}
         <div className="flex items-center justify-between gap-2 border-b border-[#eae4d9] pb-4">
           <div className="flex items-center gap-2">

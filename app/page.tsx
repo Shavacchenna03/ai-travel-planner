@@ -63,8 +63,8 @@ export default function Home() {
           {/* Soft Background Accents */}
           <div className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-[28rem] w-[90%] max-w-[50rem] -translate-x-1/2 rounded-full bg-gradient-to-tr from-[#ffedd5]/60 via-[#cae2dc]/40 to-transparent blur-3xl" />
 
-          <div className="mx-auto max-w-7xl px-6 sm:px-10 lg:px-12">
-            <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
+          <div className="mx-auto max-w-7xl px-4 sm:px-10 lg:px-12">
+            <div className="grid gap-8 sm:gap-10 lg:grid-cols-12 lg:items-center">
               
               {/* Left Hero Content */}
               <div className="lg:col-span-7 flex flex-col items-start space-y-5 sm:space-y-6">

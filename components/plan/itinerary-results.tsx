@@ -499,29 +499,31 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
 
       {/* Toast Notice Banner */}
       {toastMessage && (
-        <div className="fixed top-20 right-6 z-50 rounded-2xl bg-[#0f172a] px-5 py-3 text-xs font-bold text-white shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in slide-in-from-top-4">
-          <Sparkles className="size-4 text-[#ea580c]" />
-          <span>{toastMessage}</span>
+        <div className="fixed bottom-4 left-4 right-4 sm:top-20 sm:right-6 sm:left-auto z-50 rounded-2xl bg-[#0f172a] px-5 py-3.5 text-xs font-bold text-white shadow-2xl flex items-center justify-between sm:justify-start gap-2 border border-slate-700 animate-in fade-in slide-in-from-bottom-4 sm:slide-in-from-top-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-[#ea580c] shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
         </div>
       )}
 
-      <div className="mx-auto max-w-7xl px-6 pt-10 sm:px-10">
+      <div className="mx-auto max-w-7xl px-4 sm:px-10 pt-6 sm:pt-10">
         {/* Top Header & Actions Bar */}
-        <div className="flex flex-col gap-4 border-b border-[#eae4d9] pb-8 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#eae4d9] pb-6 sm:pb-8 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-[#ea580c]">
               <Compass className="size-4 text-[#f97316]" />
               <span>Your Custom Itinerary</span>
             </div>
-            <h1 className="mt-1 text-4xl font-black tracking-tight text-[#0f172a] sm:text-5xl">
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-[#0f172a] sm:text-5xl">
               {itinerary.destination}
             </h1>
-            <p className="mt-2 text-sm sm:text-base font-semibold text-slate-600">
+            <p className="mt-1.5 text-xs sm:text-base font-semibold text-slate-600">
               {subtitleParts.join(" · ")}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
             {tripId && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3.5 py-1.5 text-xs font-extrabold text-emerald-800 border border-emerald-200">
                 <span className="size-2 rounded-full bg-emerald-500" />
@@ -533,7 +535,7 @@ export function ItineraryResults({ initialTrip, showDelete }: ItineraryResultsPr
               onClick={handleDownloadPdf}
               disabled={isDownloading}
               size="lg"
-              className="bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/20"
+              className="w-full sm:w-auto bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#d97706] hover:to-[#ea580c] text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/20 py-3.5 justify-center"
             >
               {isDownloading ? (
                 <>
